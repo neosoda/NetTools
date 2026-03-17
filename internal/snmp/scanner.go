@@ -38,21 +38,23 @@ type ScanResult struct {
 
 // DefaultOIDs are the standard OIDs to collect during a scan
 var DefaultOIDs = []string{
-	"1.3.6.1.2.1.1.1.0", // sysDescr
-	"1.3.6.1.2.1.1.2.0", // sysObjectID
-	"1.3.6.1.2.1.1.3.0", // sysUpTime
-	"1.3.6.1.2.1.1.4.0", // sysContact
-	"1.3.6.1.2.1.1.5.0", // sysName
-	"1.3.6.1.2.1.1.6.0", // sysLocation
+	"1.3.6.1.2.1.1.1.0",    // sysDescr
+	"1.3.6.1.2.1.1.2.0",    // sysObjectID
+	"1.3.6.1.2.1.1.3.0",    // sysUpTime
+	"1.3.6.1.2.1.1.4.0",    // sysContact
+	"1.3.6.1.2.1.1.5.0",    // sysName
+	"1.3.6.1.2.1.1.6.0",    // sysLocation
+	"1.3.6.1.2.1.17.1.1.0", // dot1dBaseBridgeAddress (MAC)
 }
 
 var oidNames = map[string]string{
-	"1.3.6.1.2.1.1.1.0": "sysDescr",
-	"1.3.6.1.2.1.1.2.0": "sysObjectID",
-	"1.3.6.1.2.1.1.3.0": "sysUpTime",
-	"1.3.6.1.2.1.1.4.0": "sysContact",
-	"1.3.6.1.2.1.1.5.0": "sysName",
-	"1.3.6.1.2.1.1.6.0": "sysLocation",
+	"1.3.6.1.2.1.1.1.0":    "sysDescr",
+	"1.3.6.1.2.1.1.2.0":    "sysObjectID",
+	"1.3.6.1.2.1.1.3.0":    "sysUpTime",
+	"1.3.6.1.2.1.1.4.0":    "sysContact",
+	"1.3.6.1.2.1.1.5.0":    "sysName",
+	"1.3.6.1.2.1.1.6.0":    "sysLocation",
+	"1.3.6.1.2.1.17.1.1.0": "sysMACAddress",
 }
 
 func Scan(ctx context.Context, params ScanParams, progressCb func(ip string, done, total int)) ([]ScanResult, error) {
@@ -113,34 +115,17 @@ func Scan(ctx context.Context, params ScanParams, progressCb func(ip string, don
 	return allResults, nil
 }
 
-func probeIP(ctx context.Context, ip string, params ScanParams) ScanResult {
-	result := ScanResult{IP: ip}
-
-	timeout := params.Timeout
-	if timeout == 0 {
-		timeout = 3 * time.Second
-	}
-
-	var version gosnmp.SnmpVersion
-	switch params.Version {
-	case "v3":
-		version = gosnmp.Version3
-	default:
-		version = gosnmp.Version2c
-	}
-
+// snmpAttempt tries one SNMP GET against ip with the given community and version.
+// Returns the parsed data map and whether any real data was returned.
+func snmpAttempt(ip string, port uint16, community string, version gosnmp.SnmpVersion, timeout time.Duration, params ScanParams) (map[string]string, error) {
 	g := &gosnmp.GoSNMP{
 		Target:    ip,
-		Port:      params.Port,
-		Community: params.Community,
+		Port:      port,
+		Community: community,
 		Version:   version,
 		Timeout:   timeout,
-		Retries:   1,
+		Retries:   0,
 		MaxOids:   gosnmp.MaxOids,
-	}
-
-	if params.Port == 0 {
-		g.Port = 161
 	}
 
 	if version == gosnmp.Version3 {
@@ -156,43 +141,108 @@ func probeIP(ctx context.Context, ip string, params ScanParams) ScanResult {
 	}
 
 	if err := g.Connect(); err != nil {
-		result.Error = err
-		return result
+		return nil, err
 	}
 	defer g.Conn.Close()
 
 	oids, err := g.Get(DefaultOIDs)
 	if err != nil {
-		result.Error = err
-		return result
+		return nil, err
 	}
 
-	// Check that at least one variable was returned with a real value
+	data := make(map[string]string)
 	hasData := false
-	result.Data = make(map[string]string)
 	for _, pdu := range oids.Variables {
 		if pdu.Type == gosnmp.NoSuchObject || pdu.Type == gosnmp.NoSuchInstance || pdu.Type == gosnmp.Null {
 			continue
 		}
-		// gosnmp prefixes OID names with a leading dot — strip it for lookup
 		oidKey := strings.TrimPrefix(pdu.Name, ".")
 		name := oidNames[oidKey]
 		if name == "" {
 			name = oidKey
 		}
 		val := fmt.Sprintf("%v", pdu.Value)
-		// gosnmp returns byte slices for OctetString — convert to readable string
 		if pdu.Type == gosnmp.OctetString {
 			if b, ok := pdu.Value.([]byte); ok {
-				val = string(b)
+				if name == "sysMACAddress" {
+					val = formatMAC(b)
+				} else {
+					val = string(b)
+				}
 			}
 		}
-		result.Data[name] = val
+		data[name] = val
 		hasData = true
 	}
 
-	result.Reachable = hasData
+	if !hasData {
+		return nil, fmt.Errorf("no data returned")
+	}
+	return data, nil
+}
+
+func probeIP(ctx context.Context, ip string, params ScanParams) ScanResult {
+	result := ScanResult{IP: ip}
+
+	timeout := params.Timeout
+	if timeout == 0 {
+		timeout = 3 * time.Second
+	}
+	port := params.Port
+	if port == 0 {
+		port = 161
+	}
+
+	// Strategy (mirrors the Python script):
+	// 1. Try configured community with v2c
+	// 2. Try configured community with v1
+	// 3. Try "public" with v1
+	type attempt struct {
+		community string
+		version   gosnmp.SnmpVersion
+	}
+	attempts := []attempt{
+		{params.Community, gosnmp.Version2c},
+		{params.Community, gosnmp.Version1},
+	}
+	if params.Community != "public" {
+		attempts = append(attempts, attempt{"public", gosnmp.Version1})
+	}
+
+	// For SNMPv3, skip the community fallback chain
+	if params.Version == "v3" {
+		attempts = []attempt{{params.Community, gosnmp.Version3}}
+	}
+
+	var lastErr error
+	for _, a := range attempts {
+		data, err := snmpAttempt(ip, port, a.community, a.version, timeout, params)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		result.Data = data
+		result.Reachable = true
+		// Record which community/version worked
+		result.Data["_community"] = a.community
+		if a.version == gosnmp.Version1 {
+			result.Data["_version"] = "v1"
+		} else {
+			result.Data["_version"] = "v2c"
+		}
+		return result
+	}
+
+	result.Error = lastErr
 	return result
+}
+
+// formatMAC converts a raw []byte MAC address to "aa:bb:cc:dd:ee:ff" form.
+func formatMAC(b []byte) string {
+	if len(b) < 6 {
+		return fmt.Sprintf("%x", b)
+	}
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5])
 }
 
 func parseAuthProto(proto string) gosnmp.SnmpV3AuthProtocol {

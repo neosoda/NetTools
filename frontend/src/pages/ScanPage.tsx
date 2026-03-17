@@ -164,6 +164,7 @@ export default function ScanPage() {
                 <tr className="text-slate-400 border-b border-slate-800">
                   <th className="text-left p-3 font-medium">IP</th>
                   <th className="text-left p-3 font-medium">Hostname</th>
+                  <th className="text-left p-3 font-medium">MAC</th>
                   <th className="text-left p-3 font-medium">Vendor</th>
                   <th className="text-left p-3 font-medium">Modèle</th>
                   <th className="text-left p-3 font-medium">Location</th>
@@ -174,6 +175,7 @@ export default function ScanPage() {
                   <tr key={d.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                     <td className="p-3 font-mono text-blue-400">{d.ip}</td>
                     <td className="p-3 text-slate-200">{d.hostname || '—'}</td>
+                    <td className="p-3 font-mono text-xs text-slate-400">{d.mac_address || '—'}</td>
                     <td className="p-3">
                       <span className="text-xs bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded text-slate-300">
                         {d.vendor || 'unknown'}

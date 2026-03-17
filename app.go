@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"networktools/internal/audit"
@@ -452,20 +453,29 @@ func (a *App) TestSNMPHost(ip, community, version string, timeoutSec int) SNMPTe
 }
 
 func (a *App) resultToDevice(r snmp.ScanResult, credID, snmpVersion string) models.Device {
-	hostname := ""
-	if v, ok := r.Data["sysName"]; ok {
-		hostname = v
-	}
-	description := ""
-	if v, ok := r.Data["sysDescr"]; ok {
-		description = v
-	}
-	location := ""
-	if v, ok := r.Data["sysLocation"]; ok {
-		location = v
+	hostname := strings.TrimSpace(r.Data["sysName"])
+	description := strings.TrimSpace(r.Data["sysDescr"])
+	location := strings.TrimSpace(r.Data["sysLocation"])
+	sysObjectID := strings.TrimSpace(r.Data["sysObjectID"])
+	mac := strings.TrimSpace(r.Data["sysMACAddress"])
+
+	// Use actual version that responded (may differ from requested)
+	if v, ok := r.Data["_version"]; ok && v != "" {
+		snmpVersion = v
 	}
 
-	vendor, model := snmp.ParseVendorModelFromDescr(description)
+	// Model: OID lookup first (most precise), then sysDescr parsing
+	model := snmp.ParseModelFromOID(sysObjectID)
+	vendor := snmp.ParseVendorFromOID(sysObjectID)
+	if model == "" || vendor == "" {
+		v2, m2 := snmp.ParseVendorModelFromDescr(description)
+		if vendor == "" {
+			vendor = v2
+		}
+		if model == "" {
+			model = m2
+		}
+	}
 
 	return models.Device{
 		ID:           uuid.NewString(),
@@ -475,6 +485,7 @@ func (a *App) resultToDevice(r snmp.ScanResult, credID, snmpVersion string) mode
 		Location:     location,
 		Vendor:       vendor,
 		Model:        model,
+		MACAddress:   mac,
 		SNMPVersion:  snmpVersion,
 		SNMPPort:     161,
 		SSHPort:      22,
