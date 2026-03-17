@@ -124,7 +124,7 @@ func snmpAttempt(ip string, port uint16, community string, version gosnmp.SnmpVe
 		Community: community,
 		Version:   version,
 		Timeout:   timeout,
-		Retries:   0,
+		Retries:   1,
 		MaxOids:   gosnmp.MaxOids,
 	}
 
@@ -193,46 +193,63 @@ func probeIP(ctx context.Context, ip string, params ScanParams) ScanResult {
 		port = 161
 	}
 
-	// Strategy (mirrors the Python script):
-	// 1. Try configured community with v2c
-	// 2. Try configured community with v1
-	// 3. Try "public" with v1
+	version := gosnmp.Version2c
+	if params.Version == "v3" {
+		version = gosnmp.Version3
+	} else if params.Version == "v1" {
+		version = gosnmp.Version1
+	}
+
+	// Single attempt with 1 retry — avoids flooding the network with
+	// multiple rapid requests which can trigger rate-limiting on switches.
+	data, err := snmpAttempt(ip, port, params.Community, version, timeout, params)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+	result.Data = data
+	result.Reachable = true
+	return result
+}
+
+// ProbeIPWithFallback tries multiple communities/versions in order.
+// Used by the diagnostic test tool, NOT by the mass scanner.
+func ProbeIPWithFallback(ip string, port uint16, community string, timeoutSec int, v3params ScanParams) ScanResult {
+	result := ScanResult{IP: ip}
+	timeout := time.Duration(timeoutSec) * time.Second
+	if timeout == 0 {
+		timeout = 5 * time.Second
+	}
+	if port == 0 {
+		port = 161
+	}
+
 	type attempt struct {
 		community string
 		version   gosnmp.SnmpVersion
+		label     string
 	}
 	attempts := []attempt{
-		{params.Community, gosnmp.Version2c},
-		{params.Community, gosnmp.Version1},
+		{community, gosnmp.Version2c, "v2c"},
+		{community, gosnmp.Version1, "v1"},
 	}
-	if params.Community != "public" {
-		attempts = append(attempts, attempt{"public", gosnmp.Version1})
-	}
-
-	// For SNMPv3, skip the community fallback chain
-	if params.Version == "v3" {
-		attempts = []attempt{{params.Community, gosnmp.Version3}}
+	if community != "public" {
+		attempts = append(attempts, attempt{"public", gosnmp.Version1, "v1-public"})
 	}
 
 	var lastErr error
 	for _, a := range attempts {
-		data, err := snmpAttempt(ip, port, a.community, a.version, timeout, params)
+		data, err := snmpAttempt(ip, port, a.community, a.version, timeout, v3params)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 		result.Data = data
 		result.Reachable = true
-		// Record which community/version worked
 		result.Data["_community"] = a.community
-		if a.version == gosnmp.Version1 {
-			result.Data["_version"] = "v1"
-		} else {
-			result.Data["_version"] = "v2c"
-		}
+		result.Data["_version"] = a.label
 		return result
 	}
-
 	result.Error = lastErr
 	return result
 }

@@ -429,17 +429,9 @@ func (a *App) TestSNMPHost(ip, community, version string, timeoutSec int) SNMPTe
 	if timeoutSec <= 0 {
 		timeoutSec = 5
 	}
-	params := snmp.ScanParams{
-		CIDR:      ip,
-		Community: community,
-		Version:   version,
-		Timeout:   time.Duration(timeoutSec) * time.Second,
-	}
-	results, _ := snmp.Scan(a.ctx, params, nil)
-	if len(results) == 0 {
-		return SNMPTestResult{IP: ip, Error: "no result returned"}
-	}
-	r := results[0]
+	// Use ProbeIPWithFallback: tries community v2c → v1 → public v1.
+	// Does NOT go through the mass scanner to avoid flooding the network.
+	r := snmp.ProbeIPWithFallback(ip, 161, community, timeoutSec, snmp.ScanParams{})
 	errStr := ""
 	if r.Error != nil {
 		errStr = r.Error.Error()
