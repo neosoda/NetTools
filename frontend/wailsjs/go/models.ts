@@ -225,6 +225,24 @@ export namespace main {
 	        this.device_ids = source["device_ids"];
 	    }
 	}
+	export class SNMPTestResult {
+	    ip: string;
+	    reachable: boolean;
+	    data: Record<string, string>;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SNMPTestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ip = source["ip"];
+	        this.reachable = source["reachable"];
+	        this.data = source["data"];
+	        this.error = source["error"];
+	    }
+	}
 	export class SSHCommandRequest {
 	    device_ids: string[];
 	    commands: string[];
@@ -241,8 +259,10 @@ export namespace main {
 	}
 	export class ScanRequest {
 	    cidr: string;
+	    community: string;
 	    credential_id: string;
 	    workers: number;
+	    timeout_sec: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ScanRequest(source);
@@ -251,8 +271,10 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.cidr = source["cidr"];
+	        this.community = source["community"];
 	        this.credential_id = source["credential_id"];
 	        this.workers = source["workers"];
+	        this.timeout_sec = source["timeout_sec"];
 	    }
 	}
 
