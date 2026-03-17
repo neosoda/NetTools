@@ -11,7 +11,7 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 async function getBackend() { return import('../../wailsjs/go/main/App') }
 
 export default function ScanPage() {
-  const [cidr, setCidr] = useState('10.113.0.0/16')
+  const [cidr, setCidr] = useState('10.113.0.0/24')
   const [credId, setCredId] = useState('')
   const [workers, setWorkers] = useState('50')
   const [scanning, setScanning] = useState(false)
