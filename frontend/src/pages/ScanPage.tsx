@@ -12,6 +12,7 @@ async function getBackend() { return import('../../wailsjs/go/main/App') }
 
 export default function ScanPage() {
   const [cidr, setCidr] = useState('10.113.0.0/24')
+  const [community, setCommunity] = useState('TICE')
   const [credId, setCredId] = useState('')
   const [workers, setWorkers] = useState('50')
   const [scanning, setScanning] = useState(false)
@@ -42,7 +43,7 @@ export default function ScanPage() {
     setResults([])
     try {
       const m = await getBackend()
-      const discovered = await m.ScanNetwork({ cidr, credential_id: credId, workers: parseInt(workers) })
+      const discovered = await m.ScanNetwork({ cidr, community, credential_id: credId, workers: parseInt(workers) })
       setResults(discovered || [])
       setScanDone(true)
     } catch (e: any) {
@@ -65,10 +66,12 @@ export default function ScanPage() {
         {/* Config */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-slate-300">Configuration du scan</h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <Input label="CIDR / Plage IP" value={cidr} onChange={e => setCidr(e.target.value)}
               placeholder="10.0.0.0/24" />
-            <Select label="Credentials SNMP" value={credId} options={credOptions}
+            <Input label="Communauté SNMP" value={community} onChange={e => setCommunity(e.target.value)}
+              placeholder="TICE" />
+            <Select label="Credential (optionnel)" value={credId} options={credOptions}
               onChange={e => setCredId(e.target.value)} />
             <Input label="Workers parallèles" type="number" min="1" max="200"
               value={workers} onChange={e => setWorkers(e.target.value)} />

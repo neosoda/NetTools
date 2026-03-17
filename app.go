@@ -322,6 +322,7 @@ func (a *App) getSNMPCommunity(credentialID string) (string, error) {
 // ScanRequest is the input for a network scan
 type ScanRequest struct {
 	CIDR         string `json:"cidr"`
+	Community    string `json:"community"`
 	CredentialID string `json:"credential_id"`
 	Workers      int    `json:"workers"`
 }
@@ -330,7 +331,10 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 	community := "TICE"
 	version := "v2c"
 
-	if req.CredentialID != "" {
+	// Priority: explicit community > credential > default
+	if req.Community != "" {
+		community = req.Community
+	} else if req.CredentialID != "" {
 		comm, err := a.getSNMPCommunity(req.CredentialID)
 		if err == nil {
 			community = comm
