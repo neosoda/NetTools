@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "networktools",
+  "outputfilename": "Nettools_claude",
+  "frontend:install": "npm install --legacy-peer-deps",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "neosoda",
+    "email": "neosoda@gmail.com"
+  }
+}
