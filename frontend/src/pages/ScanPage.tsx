@@ -17,6 +17,7 @@ export default function ScanPage() {
   const [scanning, setScanning] = useState(false)
   const [progress, setProgress] = useState<{ ip: string; done: number; total: number; percent: number } | null>(null)
   const [results, setResults] = useState<any[]>([])
+  const [scanDone, setScanDone] = useState(false)
   const [error, setError] = useState('')
 
   const { data: credentials = [] } = useQuery({
@@ -37,11 +38,13 @@ export default function ScanPage() {
     if (!cidr.trim()) { setError('CIDR requis'); return }
     setError('')
     setScanning(true)
+    setScanDone(false)
     setResults([])
     try {
       const m = await getBackend()
       const discovered = await m.ScanNetwork({ cidr, credential_id: credId, workers: parseInt(workers) })
       setResults(discovered || [])
+      setScanDone(true)
     } catch (e: any) {
       setError(e?.message || String(e))
     } finally {
@@ -90,6 +93,14 @@ export default function ScanPage() {
               <div className="h-full bg-blue-600 transition-all duration-300"
                 style={{ width: `${progress.percent}%` }} />
             </div>
+          </div>
+        )}
+
+        {/* No results */}
+        {scanDone && results.length === 0 && (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-sm text-slate-400">
+            Scan terminé — aucun équipement SNMP découvert sur <span className="font-mono text-slate-300">{cidr}</span>.
+            Vérifiez la communauté SNMP et que le réseau est accessible.
           </div>
         )}
 

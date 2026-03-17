@@ -104,7 +104,7 @@ func Scan(ctx context.Context, params ScanParams, progressCb func(ip string, don
 	total := len(ips)
 	for r := range results {
 		done++
-		if r.Reachable && progressCb != nil {
+		if progressCb != nil {
 			progressCb(r.IP, done, total)
 		}
 		allResults = append(allResults, r)
