@@ -15,6 +15,7 @@ export default function ScanPage() {
   const [community, setCommunity] = useState('TICE')
   const [credId, setCredId] = useState('')
   const [workers, setWorkers] = useState('50')
+  const [timeout, setTimeout] = useState('3')
   const [scanning, setScanning] = useState(false)
   const [progress, setProgress] = useState<{ ip: string; done: number; total: number; percent: number } | null>(null)
   const [results, setResults] = useState<any[]>([])
@@ -43,7 +44,7 @@ export default function ScanPage() {
     setResults([])
     try {
       const m = await getBackend()
-      const discovered = await m.ScanNetwork({ cidr, community, credential_id: credId, workers: parseInt(workers) })
+      const discovered = await m.ScanNetwork({ cidr, community, credential_id: credId, workers: parseInt(workers), timeout_sec: parseInt(timeout) })
       setResults(discovered || [])
       setScanDone(true)
     } catch (e: any) {
@@ -66,13 +67,17 @@ export default function ScanPage() {
         {/* Config */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-slate-300">Configuration du scan</h2>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Input label="CIDR / Plage IP" value={cidr} onChange={e => setCidr(e.target.value)}
               placeholder="10.0.0.0/24" />
             <Input label="Communauté SNMP" value={community} onChange={e => setCommunity(e.target.value)}
               placeholder="TICE" />
             <Select label="Credential (optionnel)" value={credId} options={credOptions}
               onChange={e => setCredId(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="Timeout par IP (secondes)" type="number" min="1" max="30"
+              value={timeout} onChange={e => setTimeout(e.target.value)} />
             <Input label="Workers parallèles" type="number" min="1" max="200"
               value={workers} onChange={e => setWorkers(e.target.value)} />
           </div>
@@ -101,9 +106,9 @@ export default function ScanPage() {
 
         {/* No results */}
         {scanDone && results.length === 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-sm text-slate-400">
-            Scan terminé — aucun équipement SNMP découvert sur <span className="font-mono text-slate-300">{cidr}</span>.
-            Vérifiez la communauté SNMP et que le réseau est accessible.
+          <div className="bg-slate-900 border border-amber-800/50 rounded-xl p-5 text-sm text-slate-400 space-y-1">
+            <p>Scan terminé — aucun équipement SNMP découvert sur <span className="font-mono text-slate-300">{cidr}</span>.</p>
+            <p className="text-xs text-slate-500">Causes possibles : communauté incorrecte · UDP/161 bloqué par ACL/pare-feu · SNMP désactivé sur les équipements · réseau inaccessible depuis cette machine.</p>
           </div>
         )}
 

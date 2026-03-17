@@ -325,6 +325,7 @@ type ScanRequest struct {
 	Community    string `json:"community"`
 	CredentialID string `json:"credential_id"`
 	Workers      int    `json:"workers"`
+	TimeoutSec   int    `json:"timeout_sec"`
 }
 
 func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
@@ -349,12 +350,17 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 		workers = 50
 	}
 
+	timeoutSec := req.TimeoutSec
+	if timeoutSec <= 0 {
+		timeoutSec = 3
+	}
+
 	params := snmp.ScanParams{
 		CIDR:      req.CIDR,
 		Community: community,
 		Version:   version,
 		Workers:   workers,
-		Timeout:   3 * time.Second,
+		Timeout:   time.Duration(timeoutSec) * time.Second,
 	}
 
 	results, err := snmp.Scan(ctx, params, func(ip string, done, total int) {
