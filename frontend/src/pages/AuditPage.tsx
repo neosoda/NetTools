@@ -56,7 +56,13 @@ export default function AuditPage() {
         {activeTab === 'run' ? (
           <>
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-slate-300 mb-3">Équipements à auditer</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-slate-300">Équipements à auditer ({selectedDevices.length}/{(devices as any[]).length})</h2>
+                <button onClick={() => setSelectedDevices(selectedDevices.length === (devices as any[]).length ? [] : (devices as any[]).map((d: any) => d.id))}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                  {selectedDevices.length === (devices as any[]).length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2 mb-4">
                 {(devices as any[]).map((d: any) => (
                   <button key={d.id}

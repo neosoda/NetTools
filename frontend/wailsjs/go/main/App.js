@@ -126,6 +126,10 @@ export function TestDeviceConnection(arg1) {
   return window['go']['main']['App']['TestDeviceConnection'](arg1);
 }
 
+export function TestSNMPHost(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['TestSNMPHost'](arg1, arg2, arg3, arg4);
+}
+
 export function ToggleScheduledJob(arg1, arg2) {
   return window['go']['main']['App']['ToggleScheduledJob'](arg1, arg2);
 }

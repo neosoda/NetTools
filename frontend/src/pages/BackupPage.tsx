@@ -61,7 +61,13 @@ export default function BackupPage() {
             <Select label="Type de config" value={configType} options={configTypeOptions}
               onChange={e => setConfigType(e.target.value)} />
             <div className="flex-1">
-              <p className="text-xs font-medium text-slate-400 mb-1">Équipements ({selectedDevices.length} sélectionnés)</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium text-slate-400">Équipements ({selectedDevices.length}/{(devices as any[]).length} sélectionnés)</p>
+                <button onClick={() => setSelectedDevices(selectedDevices.length === (devices as any[]).length ? [] : (devices as any[]).map((d: any) => d.id))}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                  {selectedDevices.length === (devices as any[]).length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                </button>
+              </div>
               <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
                 {(devices as any[]).map((d: any) => (
                   <button key={d.id} onClick={() => toggleDevice(d.id)}

@@ -413,6 +413,44 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 	return discovered, nil
 }
 
+// SNMPTestResult is the result of a single-IP SNMP test
+type SNMPTestResult struct {
+	IP        string            `json:"ip"`
+	Reachable bool              `json:"reachable"`
+	Data      map[string]string `json:"data"`
+	Error     string            `json:"error"`
+}
+
+func (a *App) TestSNMPHost(ip, community, version string, timeoutSec int) SNMPTestResult {
+	if community == "" {
+		community = "TICE"
+	}
+	if timeoutSec <= 0 {
+		timeoutSec = 5
+	}
+	params := snmp.ScanParams{
+		CIDR:      ip,
+		Community: community,
+		Version:   version,
+		Timeout:   time.Duration(timeoutSec) * time.Second,
+	}
+	results, _ := snmp.Scan(a.ctx, params, nil)
+	if len(results) == 0 {
+		return SNMPTestResult{IP: ip, Error: "no result returned"}
+	}
+	r := results[0]
+	errStr := ""
+	if r.Error != nil {
+		errStr = r.Error.Error()
+	}
+	return SNMPTestResult{
+		IP:        r.IP,
+		Reachable: r.Reachable,
+		Data:      r.Data,
+		Error:     errStr,
+	}
+}
+
 func (a *App) resultToDevice(r snmp.ScanResult, credID, snmpVersion string) models.Device {
 	hostname := ""
 	if v, ok := r.Data["sysName"]; ok {

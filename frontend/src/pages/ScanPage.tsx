@@ -21,6 +21,9 @@ export default function ScanPage() {
   const [results, setResults] = useState<any[]>([])
   const [scanDone, setScanDone] = useState(false)
   const [error, setError] = useState('')
+  const [testIp, setTestIp] = useState('')
+  const [testResult, setTestResult] = useState<any>(null)
+  const [testing, setTesting] = useState(false)
 
   const { data: credentials = [] } = useQuery({
     queryKey: ['credentials'],
@@ -52,6 +55,19 @@ export default function ScanPage() {
     } finally {
       setScanning(false)
       setProgress(null)
+    }
+  }
+
+  const handleTest = async () => {
+    if (!testIp.trim()) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const m = await getBackend()
+      const r = await m.TestSNMPHost(testIp.trim(), community, 'v2c', parseInt(timeout))
+      setTestResult(r)
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -103,6 +119,31 @@ export default function ScanPage() {
             </div>
           </div>
         )}
+
+        {/* Single IP test */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-300">Tester une IP (diagnostic)</h2>
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <Input label="IP à tester" value={testIp} onChange={e => setTestIp(e.target.value)}
+                placeholder="10.113.76.1" />
+            </div>
+            <Button variant="secondary" loading={testing} onClick={handleTest}>
+              Tester
+            </Button>
+          </div>
+          {testResult && (
+            <div className={`rounded-lg p-3 text-xs font-mono space-y-1 ${testResult.reachable ? 'bg-green-950 border border-green-800' : 'bg-red-950 border border-red-800'}`}>
+              <p className={testResult.reachable ? 'text-green-400' : 'text-red-400'}>
+                {testResult.reachable ? '✓ Répond au SNMP' : '✗ Pas de réponse SNMP'}
+              </p>
+              {testResult.error && <p className="text-red-300">Erreur : {testResult.error}</p>}
+              {testResult.reachable && Object.entries(testResult.data || {}).map(([k, v]: any) => (
+                <p key={k} className="text-slate-300"><span className="text-slate-500">{k}:</span> {v}</p>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* No results */}
         {scanDone && results.length === 0 && (

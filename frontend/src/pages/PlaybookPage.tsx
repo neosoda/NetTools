@@ -76,6 +76,13 @@ export default function PlaybookPage() {
 
       <Modal open={!!runModal} onClose={() => setRunModal(null)} title={`Run: ${runModal?.name}`} size="lg">
         <div className="space-y-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-slate-400">{selectedDevices.length}/{(devices as any[]).length} sélectionnés</p>
+            <button onClick={() => setSelectedDevices(selectedDevices.length === (devices as any[]).length ? [] : (devices as any[]).map((d: any) => d.id))}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+              {selectedDevices.length === (devices as any[]).length ? 'Tout désélectionner' : 'Tout sélectionner'}
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2">
             {(devices as any[]).map((d: any) => (
               <button key={d.id}
