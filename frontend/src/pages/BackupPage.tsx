@@ -97,7 +97,7 @@ export default function BackupPage() {
     mutationFn: async () => {
       const m = await getBackend()
       setBackupProgress({})
-      return m.RunBackup({ device_ids: selectedDevices, config_type: configType })
+      return m.RunBackup({ device_ids: selectedDevices, config_type: configType, credential_id: globalCredId })
     },
     onSuccess: () => refetchBackups(),
   })

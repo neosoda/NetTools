@@ -148,6 +148,7 @@ export namespace main {
 	export class BackupRequest {
 	    device_ids: string[];
 	    config_type: string;
+	    credential_id: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new BackupRequest(source);
@@ -157,6 +158,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.device_ids = source["device_ids"];
 	        this.config_type = source["config_type"];
+	        this.credential_id = source["credential_id"];
 	    }
 	}
 	export class CredentialInput {

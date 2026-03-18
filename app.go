@@ -809,8 +809,9 @@ func (a *App) ExportScanToExcel(deviceIDs []string) (string, error) {
 
 // BackupRequest is the input for a backup operation
 type BackupRequest struct {
-	DeviceIDs  []string `json:"device_ids"`
-	ConfigType string   `json:"config_type"` // running|startup
+	DeviceIDs    []string `json:"device_ids"`
+	ConfigType   string   `json:"config_type"`    // running|startup
+	CredentialID string   `json:"credential_id"`  // global fallback credential
 }
 
 func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
@@ -828,7 +829,13 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 			device.SSHPort = 22
 		}
 
-		username, password, privateKey, err := a.getCredentials(device.CredentialID)
+		// Use device credential, fall back to global credential from request
+		credID := device.CredentialID
+		if credID == "" {
+			credID = req.CredentialID
+		}
+
+		username, password, privateKey, err := a.getCredentials(credID)
 		if err != nil {
 			errMsg := fmt.Sprintf("credentials manquants pour %s: %v", device.IP, err)
 			logger.Error(errMsg, err)

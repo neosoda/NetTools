@@ -19,7 +19,7 @@ export default function AuditPage() {
   const [activeTab, setActiveTab] = useState<'run' | 'rules'>('run')
   const [useLastScan, setUseLastScan] = useState(false)
   const [lastScanDevices, setLastScanDevices] = useState<any[]>([])
-  const [showRuleFilter, setShowRuleFilter] = useState(false)
+  const [showRuleFilter, setShowRuleFilter] = useState(true)
 
   const { data: allDevices = [] } = useQuery({
     queryKey: ['devices'],
@@ -206,35 +206,46 @@ export default function AuditPage() {
                 <div className="px-5 py-3 border-b border-slate-800 flex justify-between items-center">
                   <div>
                     <span className="font-medium text-white">{report.device_ip}</span>
-                    <span className="ml-3 text-sm text-slate-400">{report.passed}/{report.total_rules} règles</span>
+                    {report.total_rules > 0
+                      ? <span className="ml-3 text-sm text-slate-400">{report.passed}/{report.total_rules} règles</span>
+                      : <span className="ml-3 text-sm text-amber-400">Aucun backup disponible</span>
+                    }
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-32 h-2 bg-slate-800 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${report.score >= 80 ? 'bg-green-500' : report.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                        style={{ width: `${report.score}%` }} />
-                    </div>
-                    <span className={`text-lg font-bold ${report.score >= 80 ? 'text-green-400' : report.score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-                      {Math.round(report.score)}%
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 space-y-2">
-                  {(report.results || []).map((r: any) => (
-                    <div key={r.id} className={`flex items-center gap-3 p-2 rounded ${r.passed ? 'bg-green-900/10' : 'bg-red-900/10'}`}>
-                      <span className={r.passed ? 'text-green-400' : 'text-red-400'}>{r.passed ? '✓' : '✗'}</span>
-                      <div className="flex-1">
-                        <p className="text-sm text-slate-200">{r.rule_name}</p>
-                        {r.details && <p className="text-xs text-slate-500">{r.details}</p>}
+                  {report.total_rules > 0 && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-32 h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${report.score >= 80 ? 'bg-green-500' : report.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                          style={{ width: `${report.score}%` }} />
                       </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded border ${
-                        r.severity === 'critical' ? 'bg-red-900/30 border-red-800 text-red-400' :
-                        r.severity === 'high' ? 'bg-orange-900/30 border-orange-800 text-orange-400' :
-                        'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                        {r.severity}
+                      <span className={`text-lg font-bold ${report.score >= 80 ? 'text-green-400' : report.score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {Math.round(report.score)}%
                       </span>
                     </div>
-                  ))}
+                  )}
                 </div>
+                {report.total_rules === 0 ? (
+                  <div className="p-4 text-sm text-slate-500">
+                    Aucune configuration sauvegardée pour cet équipement. Effectuez un backup avant de lancer l'audit.
+                  </div>
+                ) : (
+                  <div className="p-4 space-y-2">
+                    {(report.results || []).map((r: any) => (
+                      <div key={r.id} className={`flex items-center gap-3 p-2 rounded ${r.passed ? 'bg-green-900/10' : 'bg-red-900/10'}`}>
+                        <span className={r.passed ? 'text-green-400' : 'text-red-400'}>{r.passed ? '✓' : '✗'}</span>
+                        <div className="flex-1">
+                          <p className="text-sm text-slate-200">{r.rule_name}</p>
+                          {r.details && <p className="text-xs text-slate-500">{r.details}</p>}
+                        </div>
+                        <span className={`text-xs px-1.5 py-0.5 rounded border ${
+                          r.severity === 'critical' ? 'bg-red-900/30 border-red-800 text-red-400' :
+                          r.severity === 'high' ? 'bg-orange-900/30 border-orange-800 text-orange-400' :
+                          'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                          {r.severity}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </>
