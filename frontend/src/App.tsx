@@ -1,11 +1,13 @@
 import { Routes, Route, NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   Server, Network, DatabaseBackup, GitCompare, ShieldCheck,
-  Terminal, CalendarClock, GitGraph, ScrollText, Settings, Activity, Square
+  Terminal, CalendarClock, GitGraph, ScrollText, Settings, Activity, Square, KeyRound
 } from 'lucide-react'
 import { cn } from './lib/utils'
 import { EventsOn } from '../wailsjs/runtime/runtime'
+import { CredentialProvider, useGlobalCredential } from './context/CredentialContext'
 
 import InventoryPage from './pages/InventoryPage'
 import ScanPage from './pages/ScanPage'
@@ -33,12 +35,40 @@ const navItems = [
 
 async function getBackend() { return import('../wailsjs/go/main/App') }
 
-export default function App() {
+function SidebarCredentialSelector() {
+  const { globalCredId, setGlobalCredId } = useGlobalCredential()
+  const { data: credentials = [] } = useQuery({
+    queryKey: ['credentials'],
+    queryFn: async () => { const m = await getBackend(); return m.GetCredentials() },
+  })
+
+  if ((credentials as any[]).length === 0) return null
+
+  return (
+    <div className="px-3 py-2 border-t border-slate-800">
+      <div className="flex items-center gap-1.5 mb-1">
+        <KeyRound className="w-3 h-3 text-slate-500" />
+        <span className="text-xs text-slate-500">Credential actif</span>
+      </div>
+      <select
+        value={globalCredId}
+        onChange={e => setGlobalCredId(e.target.value)}
+        className="w-full bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 px-2 py-1 focus:outline-none focus:border-blue-500"
+      >
+        <option value="">— Aucun —</option>
+        {(credentials as any[]).map((c: any) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function AppContent() {
   const [hasRunningTask, setHasRunningTask] = useState(false)
   const [stopStatus, setStopStatus] = useState('')
 
   useEffect(() => {
-    // Track scan state via events
     const unsub1 = EventsOn('scan:progress', () => setHasRunningTask(true))
     const unsub2 = EventsOn('scan:complete', () => setHasRunningTask(false))
     const unsub3 = EventsOn('tasks:stopped', () => {
@@ -86,6 +116,9 @@ export default function App() {
           ))}
         </div>
 
+        {/* Global credential selector */}
+        <SidebarCredentialSelector />
+
         {/* Footer with Stop button */}
         <div className="px-3 py-3 border-t border-slate-800 space-y-2">
           {hasRunningTask && (
@@ -100,7 +133,7 @@ export default function App() {
           {stopStatus && (
             <p className="text-xs text-center text-green-400">{stopStatus}</p>
           )}
-          <p className="text-xs text-slate-600 text-center">v1.1.0</p>
+          <p className="text-xs text-slate-600 text-center">v1.2.0</p>
         </div>
       </nav>
 
@@ -120,5 +153,13 @@ export default function App() {
         </Routes>
       </main>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <CredentialProvider>
+      <AppContent />
+    </CredentialProvider>
   )
 }

@@ -12,12 +12,14 @@ async function getBackend() { return import('../../wailsjs/go/main/App') }
 export default function AuditPage() {
   const qc = useQueryClient()
   const [selectedDevices, setSelectedDevices] = useState<string[]>([])
+  const [selectedRules, setSelectedRules] = useState<string[]>([])
   const [reports, setReports] = useState<any[]>([])
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [editRule, setEditRule] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'run' | 'rules'>('run')
   const [useLastScan, setUseLastScan] = useState(false)
   const [lastScanDevices, setLastScanDevices] = useState<any[]>([])
+  const [showRuleFilter, setShowRuleFilter] = useState(false)
 
   const { data: allDevices = [] } = useQuery({
     queryKey: ['devices'],
@@ -26,7 +28,21 @@ export default function AuditPage() {
   const { data: rules = [] } = useQuery({
     queryKey: ['audit-rules'],
     queryFn: async () => { const m = await getBackend(); return m.GetAuditRules() },
-  })
+    onSuccess: (data: any[]) => {
+      // Auto-select all rules when first loaded
+      if (selectedRules.length === 0 && data.length > 0) {
+        setSelectedRules(data.map((r: any) => r.id))
+      }
+    },
+  } as any)
+
+  // Sync selectedRules when rules load
+  useEffect(() => {
+    const ruleList = rules as any[]
+    if (ruleList.length > 0 && selectedRules.length === 0) {
+      setSelectedRules(ruleList.map((r: any) => r.id))
+    }
+  }, [rules])
 
   // Load last scan devices
   useEffect(() => {
@@ -44,7 +60,15 @@ export default function AuditPage() {
   const devices = useLastScan ? lastScanDevices : (allDevices as any[])
 
   const auditMutation = useMutation({
-    mutationFn: async () => { const m = await getBackend(); return m.RunAudit(selectedDevices) },
+    mutationFn: async () => {
+      const m = await getBackend()
+      const allRuleIDs = (rules as any[]).map((r: any) => r.id)
+      const useFiltered = selectedRules.length < allRuleIDs.length
+      if (useFiltered) {
+        return m.RunAuditFiltered(selectedDevices, selectedRules)
+      }
+      return m.RunAudit(selectedDevices)
+    },
     onSuccess: (data: any) => setReports(data || []),
   })
 
@@ -67,6 +91,8 @@ export default function AuditPage() {
     { value: 'aruba', label: 'Aruba' }, { value: 'allied', label: 'Allied' },
   ]
 
+  const allRulesSelected = selectedRules.length === (rules as any[]).length
+
   return (
     <div className="flex flex-col h-full">
       <PageHeader title="Audit de conformité"
@@ -78,6 +104,7 @@ export default function AuditPage() {
       <div className="flex-1 overflow-auto p-6 space-y-4">
         {activeTab === 'run' ? (
           <>
+            {/* Device selection */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-slate-300">
@@ -111,14 +138,67 @@ export default function AuditPage() {
                 ))}
                 {devices.length === 0 && (
                   <p className="text-xs text-slate-500 italic">
-                    {useLastScan ? 'Aucun équipement dans le dernier scan. Lancez d\'abord un scan réseau.' : 'Aucun équipement en inventaire.'}
+                    {useLastScan ? 'Aucun équipement dans le dernier scan.' : 'Aucun équipement en inventaire.'}
                   </p>
                 )}
               </div>
-              <Button variant="primary" loading={auditMutation.isPending}
-                disabled={selectedDevices.length === 0} onClick={() => auditMutation.mutate()}>
-                <Play className="w-4 h-4" /> Auditer ({selectedDevices.length})
-              </Button>
+
+              {/* Rule filter */}
+              <div className="border-t border-slate-800 pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <button onClick={() => setShowRuleFilter(v => !v)}
+                    className="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+                    <span className={`transition-transform ${showRuleFilter ? 'rotate-90' : ''}`}>▶</span>
+                    Règles appliquées ({selectedRules.length}/{(rules as any[]).length})
+                    {!allRulesSelected && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-amber-900/30 border border-amber-700 rounded text-amber-400 text-xs">
+                        Filtrées
+                      </span>
+                    )}
+                  </button>
+                  {showRuleFilter && (
+                    <button onClick={() => setSelectedRules(allRulesSelected ? [] : (rules as any[]).map((r: any) => r.id))}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                      {allRulesSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </button>
+                  )}
+                </div>
+
+                {showRuleFilter && (
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                    {(rules as any[]).map((rule: any) => (
+                      <label key={rule.id}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs border cursor-pointer transition-colors ${
+                          selectedRules.includes(rule.id)
+                            ? 'bg-blue-600/20 border-blue-600 text-blue-400'
+                            : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
+                        <input type="checkbox" className="w-3 h-3 accent-blue-500"
+                          checked={selectedRules.includes(rule.id)}
+                          onChange={e => setSelectedRules(prev =>
+                            e.target.checked ? [...prev, rule.id] : prev.filter(id => id !== rule.id)
+                          )} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          rule.severity === 'critical' ? 'bg-red-500' :
+                          rule.severity === 'high' ? 'bg-orange-500' :
+                          rule.severity === 'medium' ? 'bg-yellow-500' : 'bg-slate-500'}`} />
+                        {rule.name}
+                      </label>
+                    ))}
+                    {(rules as any[]).length === 0 && (
+                      <p className="text-xs text-slate-500 italic">Aucune règle configurée. Créez des règles dans l'onglet "Règles".</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3">
+                <Button variant="primary" loading={auditMutation.isPending}
+                  disabled={selectedDevices.length === 0 || selectedRules.length === 0}
+                  onClick={() => auditMutation.mutate()}>
+                  <Play className="w-4 h-4" /> Auditer ({selectedDevices.length})
+                  {!allRulesSelected && ` — ${selectedRules.length} règles`}
+                </Button>
+              </div>
             </div>
 
             {reports.map((report: any) => (
@@ -129,7 +209,6 @@ export default function AuditPage() {
                     <span className="ml-3 text-sm text-slate-400">{report.passed}/{report.total_rules} règles</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Progress bar */}
                     <div className="w-32 h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all ${report.score >= 80 ? 'bg-green-500' : report.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                         style={{ width: `${report.score}%` }} />

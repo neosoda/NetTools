@@ -20,7 +20,8 @@ func New() *Engine {
 
 type AuditRequest struct {
 	Device  models.Device
-	Config  string // running-config text
+	Config  string   // running-config text
+	RuleIDs []string // optional: restrict to these rule IDs (empty = all)
 }
 
 type AuditReport struct {
@@ -34,11 +35,13 @@ type AuditReport struct {
 	CreatedAt  time.Time           `json:"created_at"`
 }
 
-// Run executes all enabled audit rules against a device config
+// Run executes audit rules against a device config
 func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error) {
 	var rules []models.AuditRule
 	query := db.DB.Where("enabled = ?", true)
-	if req.Device.Vendor != "" {
+	if len(req.RuleIDs) > 0 {
+		query = query.Where("id IN ?", req.RuleIDs)
+	} else if req.Device.Vendor != "" {
 		query = query.Where("vendor = '' OR vendor = ?", req.Device.Vendor)
 	}
 	if err := query.Find(&rules).Error; err != nil {

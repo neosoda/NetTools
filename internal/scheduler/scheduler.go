@@ -19,10 +19,10 @@ type JobRunner func(ctx context.Context, jobType string, payload map[string]inte
 
 // Scheduler wraps robfig/cron with DB persistence
 type Scheduler struct {
-	cron      *cron.Cron
-	mu        sync.Mutex
-	runner    JobRunner
-	entryIDs  map[string]cron.EntryID // jobID -> cron.EntryID
+	cron     *cron.Cron
+	mu       sync.Mutex
+	runner   JobRunner
+	entryIDs map[string]cron.EntryID // jobID -> cron.EntryID
 }
 
 var instance *Scheduler
@@ -62,23 +62,27 @@ func (s *Scheduler) loadFromDB(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) schedule(ctx context.Context, job *models.ScheduledJob) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Remove existing entry if any
+// scheduleUnlocked registers a job in the cron engine. Must be called with s.mu held.
+func (s *Scheduler) scheduleUnlocked(ctx context.Context, job *models.ScheduledJob) {
 	if id, ok := s.entryIDs[job.ID]; ok {
 		s.cron.Remove(id)
+		delete(s.entryIDs, job.ID)
 	}
 
 	entryID, err := s.cron.AddFunc(job.CronExpression, func() {
 		s.executeJob(ctx, job)
 	})
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to schedule job %s", job.Name), err)
+		logger.Error(fmt.Sprintf("failed to schedule job %s: invalid cron expression '%s'", job.Name, job.CronExpression), err)
 		return
 	}
 	s.entryIDs[job.ID] = entryID
+}
+
+func (s *Scheduler) schedule(ctx context.Context, job *models.ScheduledJob) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.scheduleUnlocked(ctx, job)
 }
 
 func (s *Scheduler) executeJob(ctx context.Context, job *models.ScheduledJob) {
@@ -108,9 +112,9 @@ func (s *Scheduler) executeJob(ctx context.Context, job *models.ScheduledJob) {
 		status, time.Since(start).Milliseconds())
 }
 
-// AddJob adds a new job to DB and schedules it
+// AddJob persists and schedules a job (create or update)
 func (s *Scheduler) AddJob(ctx context.Context, job *models.ScheduledJob) error {
-	if err := db.DB.Create(job).Error; err != nil {
+	if err := db.DB.Save(job).Error; err != nil {
 		return err
 	}
 	s.schedule(ctx, job)
@@ -147,7 +151,8 @@ func (s *Scheduler) ToggleJob(ctx context.Context, jobID string, enabled bool) e
 			delete(s.entryIDs, jobID)
 		}
 	} else {
-		s.schedule(ctx, &job)
+		// Call scheduleUnlocked directly — mutex is already held
+		s.scheduleUnlocked(ctx, &job)
 	}
 	return nil
 }

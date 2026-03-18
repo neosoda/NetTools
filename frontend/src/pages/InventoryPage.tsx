@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Edit, Plug, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Edit, Plug, RefreshCw, Eraser } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -38,6 +38,7 @@ export default function InventoryPage() {
   const [editDevice, setEditDevice] = useState<Partial<Device> | null>(null)
   const [testing, setTesting] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const { data: devices = [], isLoading } = useQuery({
     queryKey: ['devices'],
@@ -75,6 +76,17 @@ export default function InventoryPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['devices'] }),
   })
 
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      const m = await getBackend()
+      return m.ClearInventory()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['devices'] })
+      setConfirmClear(false)
+    },
+  })
+
   const handleTest = async (deviceId: string) => {
     setTesting(deviceId)
     const m = await getBackend()
@@ -105,6 +117,19 @@ export default function InventoryPage() {
               onChange={e => setSearch(e.target.value)}
               className="w-48 py-1.5"
             />
+            {!confirmClear ? (
+              <Button variant="ghost" onClick={() => setConfirmClear(true)} title="Vider l'inventaire">
+                <Eraser className="w-4 h-4 text-red-400" />
+              </Button>
+            ) : (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-red-400 mr-1">Vider tout ?</span>
+                <Button size="sm" variant="ghost" onClick={() => clearMutation.mutate()} loading={clearMutation.isPending}>
+                  <span className="text-red-400">Oui</span>
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmClear(false)}>Non</Button>
+              </div>
+            )}
             <Button
               variant="primary"
               onClick={() => { setEditDevice({ ssh_port: 22, vendor: 'cisco' }); setShowModal(true) }}

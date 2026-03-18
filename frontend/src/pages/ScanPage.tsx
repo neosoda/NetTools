@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Radio, Play, Square, FileSpreadsheet, List, Network } from 'lucide-react'
+import { Radio, Play, Square, FileSpreadsheet, Network, Layers, Cpu } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Input from '../components/Input'
-import Select from '../components/Select'
-import StatusBadge from '../components/StatusBadge'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { useGlobalCredential } from '../context/CredentialContext'
 
 async function getBackend() { return import('../../wailsjs/go/main/App') }
 
@@ -19,12 +18,21 @@ function formatUptime(seconds: number) {
   return `${hours}h${String(minutes).padStart(2,'0')}m`
 }
 
+// Build IP list for switch range: x.1-95 + x.254
+function buildSwitchIPs(prefix: string): string[] {
+  const ips: string[] = []
+  for (let i = 1; i <= 95; i++) ips.push(`${prefix}.${i}`)
+  ips.push(`${prefix}.254`)
+  return ips
+}
+
+type ScanMode = 'switches' | 'full' | 'cidr'
+
 export default function ScanPage() {
-  const [inputMode, setInputMode] = useState<'cidr' | 'list'>('cidr')
-  const [cidr, setCidr] = useState('10.113.0.0/24')
-  const [ipListText, setIpListText] = useState('')
-  const [community, setCommunity] = useState('TICE')
-  const [credId, setCredId] = useState('')
+  const { globalCredId } = useGlobalCredential()
+  const [scanMode, setScanMode] = useState<ScanMode>('switches')
+  const [prefix, setPrefix] = useState('10.113.76')  // base prefix for switches/full modes
+  const [cidr, setCidr] = useState('10.113.76.0/24')
   const [workers, setWorkers] = useState('10')
   const [timeout, setTimeoutVal] = useState('3')
   const [scanning, setScanning] = useState(false)
@@ -45,14 +53,8 @@ export default function ScanPage() {
 
   useEffect(() => {
     const unsub1 = EventsOn('scan:progress', (data: any) => setProgress(data))
-    const unsub2 = EventsOn('scan:complete', () => {
-      setScanning(false)
-      setProgress(null)
-    })
-    const unsub3 = EventsOn('tasks:stopped', () => {
-      setScanning(false)
-      setProgress(null)
-    })
+    const unsub2 = EventsOn('scan:complete', () => { setScanning(false); setProgress(null) })
+    const unsub3 = EventsOn('tasks:stopped', () => { setScanning(false); setProgress(null) })
     return () => { unsub1(); unsub2(); unsub3() }
   }, [])
 
@@ -63,21 +65,27 @@ export default function ScanPage() {
     setResults([])
     resultDeviceIds.current = []
 
+    let scanCidr = ''
     let ipList: string[] = []
-    if (inputMode === 'list') {
-      ipList = ipListText.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
-      if (ipList.length === 0) { setError('Liste IP vide'); setScanning(false); return }
-    } else if (!cidr.trim()) {
-      setError('CIDR requis'); setScanning(false); return
+
+    if (scanMode === 'switches') {
+      if (!prefix.trim()) { setError('Préfixe réseau requis (ex: 10.113.76)'); setScanning(false); return }
+      ipList = buildSwitchIPs(prefix.trim())
+    } else if (scanMode === 'full') {
+      if (!prefix.trim()) { setError('Préfixe réseau requis (ex: 10.113.76)'); setScanning(false); return }
+      scanCidr = `${prefix.trim()}.0/24`
+    } else {
+      if (!cidr.trim()) { setError('CIDR requis'); setScanning(false); return }
+      scanCidr = cidr.trim()
     }
 
     try {
       const m = await getBackend()
       const discovered = await m.ScanNetwork({
-        cidr: inputMode === 'cidr' ? cidr : '',
+        cidr: scanCidr,
         ip_list: ipList,
-        community,
-        credential_id: credId,
+        community: '',
+        credential_id: globalCredId,
         workers: parseInt(workers),
         timeout_sec: parseInt(timeout),
       })
@@ -106,6 +114,8 @@ export default function ScanPage() {
     setTestResult(null)
     try {
       const m = await getBackend()
+      const cred = (credentials as any[]).find((c: any) => c.id === globalCredId)
+      const community = cred?.has_snmp_community ? '' : 'TICE'
       const r = await m.TestSNMPHost(testIp.trim(), community, 'v2c', parseInt(timeout))
       setTestResult(r)
     } finally {
@@ -125,10 +135,11 @@ export default function ScanPage() {
     }
   }
 
-  const credOptions = [
-    { value: '', label: '— Community directe —' },
-    ...(credentials as any[]).map((c: any) => ({ value: c.id, label: c.name })),
-  ]
+  const scanModeDesc: Record<ScanMode, string> = {
+    switches: `Switches : ${prefix}.1-95 + ${prefix}.254 (${96} IPs)`,
+    full: `Complet : ${prefix}.0/24 (256 IPs)`,
+    cidr: 'Plage CIDR personnalisée',
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -139,47 +150,49 @@ export default function ScanPage() {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-300">Configuration du scan</h2>
+            {/* Mode selector */}
             <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
-              <button onClick={() => setInputMode('cidr')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${inputMode === 'cidr' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                <Network className="w-3.5 h-3.5" /> CIDR
+              <button onClick={() => setScanMode('switches')}
+                title="Espace switches : x.1-95 + x.254"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${scanMode === 'switches' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                <Cpu className="w-3.5 h-3.5" /> Switches
               </button>
-              <button onClick={() => setInputMode('list')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${inputMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                <List className="w-3.5 h-3.5" /> Liste manuelle
+              <button onClick={() => setScanMode('full')}
+                title="Scan complet /24"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${scanMode === 'full' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                <Layers className="w-3.5 h-3.5" /> Complet
+              </button>
+              <button onClick={() => setScanMode('cidr')}
+                title="CIDR personnalisé"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${scanMode === 'cidr' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                <Network className="w-3.5 h-3.5" /> CIDR
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            {inputMode === 'cidr' ? (
+          <div className="grid grid-cols-3 gap-4 items-end">
+            {scanMode === 'cidr' ? (
               <Input label="CIDR / Plage IP" value={cidr} onChange={e => setCidr(e.target.value)}
                 placeholder="10.0.0.0/24" />
             ) : (
-              <div className="col-span-1">
-                <label className="text-xs font-medium text-slate-400 block mb-1">
-                  Liste d'IPs (une par ligne ou séparées par virgule)
-                </label>
-                <textarea value={ipListText} onChange={e => setIpListText(e.target.value)}
-                  placeholder={"10.113.0.1\n10.113.0.2\n10.113.76.1"}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500 resize-none"
-                  rows={4} />
-                <p className="text-xs text-slate-500 mt-1">
-                  {ipListText.split(/[\n,;]+/).filter(s => s.trim()).length} IP(s)
-                </p>
+              <div>
+                <Input label="Préfixe réseau (3 octets)" value={prefix} onChange={e => setPrefix(e.target.value)}
+                  placeholder="10.113.76" />
+                <p className="text-xs text-slate-500 mt-1">{scanModeDesc[scanMode]}</p>
               </div>
             )}
-            <Input label="Communauté SNMP" value={community} onChange={e => setCommunity(e.target.value)}
-              placeholder="TICE" />
-            <Select label="Credential (optionnel)" value={credId} options={credOptions}
-              onChange={e => setCredId(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <Input label="Timeout par IP (secondes)" type="number" min="1" max="30"
+            <Input label="Timeout par IP (s)" type="number" min="1" max="30"
               value={timeout} onChange={e => setTimeoutVal(e.target.value)} />
             <Input label="Workers parallèles" type="number" min="1" max="200"
               value={workers} onChange={e => setWorkers(e.target.value)} />
           </div>
+
+          {globalCredId && (
+            <p className="text-xs text-blue-400">
+              Credential actif depuis la barre latérale
+            </p>
+          )}
+
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex gap-3">
             <Button variant="primary" loading={scanning} onClick={handleScan}>
@@ -237,7 +250,7 @@ export default function ScanPage() {
         {scanDone && results.length === 0 && (
           <div className="bg-slate-900 border border-amber-800/50 rounded-xl p-5 text-sm text-slate-400 space-y-1">
             <p>Scan terminé — aucun équipement SNMP découvert.</p>
-            <p className="text-xs text-slate-500">Causes possibles : communauté incorrecte · UDP/161 bloqué par ACL/pare-feu · SNMP désactivé · réseau inaccessible.</p>
+            <p className="text-xs text-slate-500">Causes possibles : communauté incorrecte · UDP/161 bloqué · SNMP désactivé · réseau inaccessible.</p>
           </div>
         )}
 

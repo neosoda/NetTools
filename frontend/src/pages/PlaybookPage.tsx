@@ -311,7 +311,7 @@ steps:
                         {copied === t.name ? 'Copié !' : 'Utiliser'}
                       </Button>
                     </div>
-                    <pre className="text-xs text-slate-500 bg-slate-950 p-2 rounded font-mono overflow-hidden max-h-20">
+                    <pre className="text-xs text-slate-500 bg-slate-950 p-2 rounded font-mono overflow-y-auto max-h-48">
                       {t.content}
                     </pre>
                   </div>

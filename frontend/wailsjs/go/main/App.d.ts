@@ -8,6 +8,8 @@ import {audit} from '../models';
 import {playbook} from '../models';
 import {ssh} from '../models';
 
+export function ClearInventory():Promise<void>;
+
 export function CompareBackups(arg1:string,arg2:string):Promise<diff.DiffResult>;
 
 export function CompareDiff(arg1:main.DiffRequest):Promise<diff.DiffResult>;
@@ -40,6 +42,8 @@ export function GetDevice(arg1:string):Promise<models.Device>;
 
 export function GetDevices():Promise<Array<models.Device>>;
 
+export function GetDevicesByIPs(arg1:Array<string>):Promise<Array<models.Device>>;
+
 export function GetLastScanDevices():Promise<Array<models.Device>>;
 
 export function GetLogFileContent(arg1:string):Promise<string>;
@@ -55,6 +59,8 @@ export function GetSettings():Promise<main.AppSettings>;
 export function GetTopology():Promise<topology.Graph>;
 
 export function RunAudit(arg1:Array<string>):Promise<Array<audit.AuditReport>>;
+
+export function RunAuditFiltered(arg1:Array<string>,arg2:Array<string>):Promise<Array<audit.AuditReport>>;
 
 export function RunBackup(arg1:main.BackupRequest):Promise<Array<models.Backup>>;
 

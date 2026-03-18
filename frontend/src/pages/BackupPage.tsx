@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Play, Eye, Terminal, RefreshCw, Send, Clock } from 'lucide-react'
+import { Play, Eye, Terminal, RefreshCw, Send, Clock, List } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Select from '../components/Select'
@@ -8,17 +8,23 @@ import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import { formatDate, formatBytes } from '../lib/utils'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { useGlobalCredential } from '../context/CredentialContext'
 
 async function getBackend() { return import('../../wailsjs/go/main/App') }
 
+type DeviceSource = 'inventory' | 'last_scan' | 'manual'
+
 export default function BackupPage() {
+  const { globalCredId } = useGlobalCredential()
   const [selectedDevices, setSelectedDevices] = useState<string[]>([])
   const [configType, setConfigType] = useState('running')
   const [viewBackup, setViewBackup] = useState<string | null>(null)
   const [backupContent, setBackupContent] = useState('')
   const [selectedDevice, setSelectedDevice] = useState('')
-  const [useLastScan, setUseLastScan] = useState(false)
+  const [deviceSource, setDeviceSource] = useState<DeviceSource>('inventory')
   const [lastScanDevices, setLastScanDevices] = useState<any[]>([])
+  const [manualIpText, setManualIpText] = useState('')
+  const [manualDevices, setManualDevices] = useState<any[]>([])
   const [backupProgress, setBackupProgress] = useState<Record<string, any>>({})
 
   // Terminal state
@@ -40,17 +46,30 @@ export default function BackupPage() {
     queryFn: async () => { const m = await getBackend(); return m.GetBackups(selectedDevice) },
   })
 
-  // Load last scan devices when toggle is enabled
+  // Load last scan devices when source changes
   useEffect(() => {
-    if (useLastScan) {
+    if (deviceSource === 'last_scan') {
       getBackend().then(m => m.GetLastScanDevices()).then(devs => {
         setLastScanDevices(devs || [])
         setSelectedDevices((devs || []).map((d: any) => d.id))
       })
+    } else if (deviceSource === 'inventory') {
+      setSelectedDevices((allDevices as any[]).map((d: any) => d.id))
+    } else {
+      setSelectedDevices([])
     }
-  }, [useLastScan])
+  }, [deviceSource])
 
-  // Listen to backup progress events
+  // Resolve manual IPs to known devices
+  const handleResolveManualIPs = async () => {
+    const ips = manualIpText.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
+    if (!ips.length) return
+    const m = await getBackend()
+    const found = await m.GetDevicesByIPs(ips)
+    setManualDevices(found || [])
+    setSelectedDevices((found || []).map((d: any) => d.id))
+  }
+
   useEffect(() => {
     const unsub = EventsOn('backup:progress', (data: any) => {
       setBackupProgress(prev => ({ ...prev, [data.device_id]: data }))
@@ -58,7 +77,6 @@ export default function BackupPage() {
     return () => unsub()
   }, [])
 
-  // Listen to terminal output events
   useEffect(() => {
     const unsub = EventsOn('terminal:output', (data: any) => {
       setTerminalLines(prev => [...prev, { text: data.line || '', error: !!data.error }])
@@ -66,12 +84,14 @@ export default function BackupPage() {
     return () => unsub()
   }, [])
 
-  // Auto-scroll terminal
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [terminalLines])
 
-  const devices = useLastScan ? lastScanDevices : (allDevices as any[])
+  const devices =
+    deviceSource === 'last_scan' ? lastScanDevices :
+    deviceSource === 'manual' ? manualDevices :
+    (allDevices as any[])
 
   const backupMutation = useMutation({
     mutationFn: async () => {
@@ -129,20 +149,44 @@ export default function BackupPage() {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-300">Lancer un backup</h2>
-            <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-              <div onClick={() => setUseLastScan(v => !v)}
-                className={`relative w-9 h-5 rounded-full transition-colors ${useLastScan ? 'bg-blue-600' : 'bg-slate-700'}`}>
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${useLastScan ? 'left-4' : 'left-0.5'}`} />
-              </div>
-              Utiliser le dernier scan
-              {useLastScan && lastScanDevices.length > 0 && (
-                <span className="text-blue-400">({lastScanDevices.length} équipements)</span>
-              )}
-              {useLastScan && lastScanDevices.length === 0 && (
-                <span className="text-amber-400">(aucun scan récent)</span>
-              )}
-            </label>
+            {/* Source selector */}
+            <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
+              {(['inventory', 'last_scan', 'manual'] as DeviceSource[]).map(mode => (
+                <button key={mode} onClick={() => setDeviceSource(mode)}
+                  className={`px-3 py-1 rounded-md text-xs transition-colors ${deviceSource === mode ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                  {mode === 'inventory' ? 'Inventaire' : mode === 'last_scan' ? 'Dernier scan' : 'Liste manuelle'}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Manual IP input */}
+          {deviceSource === 'manual' && (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-400 block">
+                Liste d'IPs (une par ligne ou séparées par virgule)
+              </label>
+              <div className="flex gap-2">
+                <textarea value={manualIpText} onChange={e => setManualIpText(e.target.value)}
+                  placeholder={"10.113.76.1\n10.113.76.2\n10.113.76.3"}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-md p-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500 resize-none"
+                  rows={3} />
+                <Button variant="secondary" onClick={handleResolveManualIPs}>
+                  <List className="w-4 h-4" /> Résoudre
+                </Button>
+              </div>
+              {manualDevices.length > 0 && (
+                <p className="text-xs text-green-400">{manualDevices.length} équipement(s) trouvé(s) dans l'inventaire</p>
+              )}
+              {manualIpText && manualDevices.length === 0 && (
+                <p className="text-xs text-amber-400">Cliquez "Résoudre" pour chercher les équipements correspondants</p>
+              )}
+            </div>
+          )}
+
+          {deviceSource === 'last_scan' && lastScanDevices.length === 0 && (
+            <p className="text-xs text-amber-400">Aucun scan récent. Lancez d'abord une découverte réseau.</p>
+          )}
 
           <div className="flex gap-4 items-end">
             <Select label="Type de config" value={configType} options={configTypeOptions}
@@ -173,9 +217,7 @@ export default function BackupPage() {
                   )
                 })}
                 {devices.length === 0 && (
-                  <p className="text-xs text-slate-500 italic">
-                    {useLastScan ? 'Lancez un scan réseau d\'abord.' : 'Aucun équipement en inventaire.'}
-                  </p>
+                  <p className="text-xs text-slate-500 italic">Aucun équipement sélectionné.</p>
                 )}
               </div>
             </div>
@@ -184,6 +226,10 @@ export default function BackupPage() {
               <Play className="w-4 h-4" /> Lancer
             </Button>
           </div>
+
+          {globalCredId && (
+            <p className="text-xs text-blue-400">Credential actif depuis la barre latérale (override par équipement)</p>
+          )}
 
           {/* Progress summary */}
           {Object.keys(backupProgress).length > 0 && (
@@ -282,7 +328,6 @@ export default function BackupPage() {
         title={`Terminal SSH — ${terminalDeviceLabel?.hostname || terminalDeviceLabel?.ip || '...'}`}
         size="xl">
         <div className="space-y-3">
-          {/* Command input */}
           <div className="flex gap-2">
             <div className="flex-1">
               <input
@@ -297,8 +342,6 @@ export default function BackupPage() {
               <Send className="w-4 h-4" /> Envoyer
             </Button>
           </div>
-
-          {/* Suggestions rapides */}
           <div className="flex flex-wrap gap-1">
             {['show version', 'show running-config', 'show interfaces', 'show vlan', 'show ip route', 'show arp'].map(cmd => (
               <button key={cmd} onClick={() => setTerminalCommand(cmd)}
@@ -307,8 +350,6 @@ export default function BackupPage() {
               </button>
             ))}
           </div>
-
-          {/* Terminal output */}
           <div className="bg-black rounded-lg p-3 h-80 overflow-y-auto font-mono text-xs">
             {terminalLines.length === 0 && !terminalRunning && (
               <p className="text-slate-600">Saisissez une commande et cliquez Envoyer...</p>

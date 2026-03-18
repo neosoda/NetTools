@@ -160,6 +160,25 @@ func (a *App) DeleteDevice(id string) error {
 	return err
 }
 
+// ClearInventory removes all devices from the inventory
+func (a *App) ClearInventory() error {
+	if err := db.DB.Where("1 = 1").Delete(&models.Device{}).Error; err != nil {
+		return err
+	}
+	logger.AuditAction(a.ctx, "clear_inventory", "device", "all", "", "success", 0)
+	return nil
+}
+
+// GetDevicesByIPs returns devices matching a list of IP addresses
+func (a *App) GetDevicesByIPs(ips []string) []models.Device {
+	if len(ips) == 0 {
+		return []models.Device{}
+	}
+	var devices []models.Device
+	db.DB.Where("ip IN ?", ips).Order("hostname, ip").Find(&devices)
+	return devices
+}
+
 // TestDeviceConnection tests SSH connectivity to a device
 func (a *App) TestDeviceConnection(deviceID string) map[string]interface{} {
 	var device models.Device
@@ -1049,6 +1068,52 @@ func (a *App) RunAudit(deviceIDs []string) ([]audit.AuditReport, error) {
 			logger.AuditAction(a.ctx, "audit", "device", deviceID,
 				fmt.Sprintf(`{"ip":"%s","score":%.0f,"passed":%d,"total":%d}`,
 					device.IP, report.Score, report.Passed, report.TotalRules),
+				"success", 0)
+		}
+	}
+
+	return reports, nil
+}
+
+// RunAuditFiltered runs audit with specific device IDs and rule IDs (empty ruleIDs = all enabled rules)
+func (a *App) RunAuditFiltered(deviceIDs []string, ruleIDs []string) ([]audit.AuditReport, error) {
+	var reports []audit.AuditReport
+
+	for _, deviceID := range deviceIDs {
+		var device models.Device
+		if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
+			continue
+		}
+
+		var latestBackup models.Backup
+		err := db.DB.Where("device_id = ? AND status = 'success'", deviceID).
+			Order("created_at DESC").First(&latestBackup).Error
+		if err != nil {
+			reports = append(reports, audit.AuditReport{
+				DeviceID: deviceID,
+				DeviceIP: device.IP,
+			})
+			continue
+		}
+
+		content, err := a.backupMgr.GetContent(latestBackup.ID)
+		if err != nil {
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+		report, err := a.auditEngine.Run(ctx, audit.AuditRequest{
+			Device:  device,
+			Config:  content,
+			RuleIDs: ruleIDs,
+		})
+		cancel()
+
+		if err == nil && report != nil {
+			reports = append(reports, *report)
+			logger.AuditAction(a.ctx, "audit", "device", deviceID,
+				fmt.Sprintf(`{"ip":"%s","score":%.0f,"passed":%d,"total":%d,"rules":%d}`,
+					device.IP, report.Score, report.Passed, report.TotalRules, len(ruleIDs)),
 				"success", 0)
 		}
 	}
