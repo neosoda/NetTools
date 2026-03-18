@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Radio, Play, Square, FileSpreadsheet, Network, Layers, Cpu } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
@@ -33,6 +32,7 @@ export default function ScanPage() {
   const [scanMode, setScanMode] = useState<ScanMode>('switches')
   const [prefix, setPrefix] = useState('10.113.76')  // base prefix for switches/full modes
   const [cidr, setCidr] = useState('10.113.76.0/24')
+  const [community, setCommunity] = useState('TICE')
   const [workers, setWorkers] = useState('10')
   const [timeout, setTimeoutVal] = useState('3')
   const [scanning, setScanning] = useState(false)
@@ -45,11 +45,6 @@ export default function ScanPage() {
   const [testing, setTesting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const resultDeviceIds = useRef<string[]>([])
-
-  const { data: credentials = [] } = useQuery({
-    queryKey: ['credentials'],
-    queryFn: async () => { const m = await getBackend(); return m.GetCredentials() },
-  })
 
   useEffect(() => {
     const unsub1 = EventsOn('scan:progress', (data: any) => setProgress(data))
@@ -84,7 +79,7 @@ export default function ScanPage() {
       const discovered = await m.ScanNetwork({
         cidr: scanCidr,
         ip_list: ipList,
-        community: '',
+        community: community.trim() || 'TICE',
         credential_id: globalCredId,
         workers: parseInt(workers),
         timeout_sec: parseInt(timeout),
@@ -114,9 +109,7 @@ export default function ScanPage() {
     setTestResult(null)
     try {
       const m = await getBackend()
-      const cred = (credentials as any[]).find((c: any) => c.id === globalCredId)
-      const community = cred?.has_snmp_community ? '' : 'TICE'
-      const r = await m.TestSNMPHost(testIp.trim(), community, 'v2c', parseInt(timeout))
+      const r = await m.TestSNMPHost(testIp.trim(), community.trim() || 'TICE', 'v2c', parseInt(timeout))
       setTestResult(r)
     } finally {
       setTesting(false)
@@ -170,7 +163,7 @@ export default function ScanPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 items-end">
+          <div className="grid grid-cols-4 gap-4 items-end">
             {scanMode === 'cidr' ? (
               <Input label="CIDR / Plage IP" value={cidr} onChange={e => setCidr(e.target.value)}
                 placeholder="10.0.0.0/24" />
@@ -181,6 +174,8 @@ export default function ScanPage() {
                 <p className="text-xs text-slate-500 mt-1">{scanModeDesc[scanMode]}</p>
               </div>
             )}
+            <Input label="Communauté SNMP" value={community} onChange={e => setCommunity(e.target.value)}
+              placeholder="TICE" />
             <Input label="Timeout par IP (s)" type="number" min="1" max="30"
               value={timeout} onChange={e => setTimeoutVal(e.target.value)} />
             <Input label="Workers parallèles" type="number" min="1" max="200"

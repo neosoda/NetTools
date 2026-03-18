@@ -80,7 +80,14 @@ func (a *App) startup(ctx context.Context) {
 
 	// Initialize services
 	a.secretMgr = secret.New()
-	a.backupMgr = backup.New(filepath.Join(a.dataDir, "backups"))
+
+	// Backup dir: Windows Downloads folder by default
+	backupDir := filepath.Join(a.dataDir, "backups") // fallback
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		dl := filepath.Join(homeDir, "Downloads", "NetworkTools_Backups")
+		backupDir = dl
+	}
+	a.backupMgr = backup.New(backupDir)
 	a.auditEngine = audit.New()
 
 	// Initialize scheduler
@@ -810,56 +817,88 @@ func (a *App) ExportScanToExcel(deviceIDs []string) (string, error) {
 // BackupRequest is the input for a backup operation
 type BackupRequest struct {
 	DeviceIDs    []string `json:"device_ids"`
-	ConfigType   string   `json:"config_type"`    // running|startup
-	CredentialID string   `json:"credential_id"`  // global fallback credential
+	ConfigType   string   `json:"config_type"`   // running|startup
+	CredentialID string   `json:"credential_id"` // global fallback credential
+	Username     string   `json:"username"`      // inline override (no credential needed)
+	Password     string   `json:"password"`      // inline override
+	IPList       []string `json:"ip_list"`       // backup by IP directly (no inventory needed)
 }
 
 func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 	var results []models.Backup
 
+	configType := req.ConfigType
+	if configType == "" {
+		configType = "running"
+	}
+
+	// Collect devices from IDs
+	var devices []models.Device
 	for _, deviceID := range req.DeviceIDs {
 		var device models.Device
 		if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
 			logger.Error(fmt.Sprintf("device not found: %s", deviceID), err)
 			continue
 		}
+		devices = append(devices, device)
+	}
 
-		// Ensure SSH port is set
+	// Also collect from direct IP list (no inventory required)
+	for _, ip := range req.IPList {
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			continue
+		}
+		var existing models.Device
+		if db.DB.Where("ip = ?", ip).First(&existing).Error == nil {
+			devices = append(devices, existing)
+		} else {
+			devices = append(devices, models.Device{
+				ID:      uuid.NewString(),
+				IP:      ip,
+				SSHPort: 22,
+				Vendor:  "unknown",
+			})
+		}
+	}
+
+	for _, device := range devices {
 		if device.SSHPort == 0 {
 			device.SSHPort = 22
 		}
 
-		// Use device credential, fall back to global credential from request
-		credID := device.CredentialID
-		if credID == "" {
-			credID = req.CredentialID
-		}
-
-		username, password, privateKey, err := a.getCredentials(credID)
-		if err != nil {
-			errMsg := fmt.Sprintf("credentials manquants pour %s: %v", device.IP, err)
-			logger.Error(errMsg, err)
-			results = append(results, models.Backup{
-				DeviceID:     deviceID,
-				Status:       "failed",
-				ErrorMessage: errMsg,
-			})
-			runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
-				"device_id": deviceID,
-				"device_ip": device.IP,
-				"status":    "failed",
-				"error":     errMsg,
-			})
-			continue
-		}
-
-		configType := req.ConfigType
-		if configType == "" {
-			configType = "running"
+		// Credential priority: inline username > device credential > global credential
+		var username, password, privateKey string
+		if req.Username != "" {
+			username = req.Username
+			password = req.Password
+		} else {
+			credID := device.CredentialID
+			if credID == "" {
+				credID = req.CredentialID
+			}
+			var err error
+			username, password, privateKey, err = a.getCredentials(credID)
+			if err != nil {
+				errMsg := fmt.Sprintf("credentials manquants pour %s: %v", device.IP, err)
+				logger.Error(errMsg, err)
+				results = append(results, models.Backup{
+					DeviceID:     device.ID,
+					Status:       "failed",
+					ErrorMessage: errMsg,
+				})
+				runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
+					"device_id": device.ID,
+					"device_ip": device.IP,
+					"status":    "failed",
+					"error":     errMsg,
+				})
+				continue
+			}
 		}
 
 		runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
-			"device_id": deviceID,
+			"device_id": device.ID,
 			"device_ip": device.IP,
 			"status":    "running",
 			"message":   fmt.Sprintf("Connexion SSH à %s...", device.IP),
@@ -886,13 +925,13 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 			errMsg = err.Error()
 		}
 		runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
-			"device_id": deviceID,
+			"device_id": device.ID,
 			"device_ip": device.IP,
 			"status":    status,
 			"error":     errMsg,
 		})
 
-		logger.AuditAction(a.ctx, "backup", "device", deviceID,
+		logger.AuditAction(a.ctx, "backup", "device", device.ID,
 			fmt.Sprintf(`{"ip":"%s","config_type":"%s","result":"%s"}`, device.IP, configType, status),
 			status, 0)
 	}

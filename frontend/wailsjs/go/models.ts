@@ -149,6 +149,9 @@ export namespace main {
 	    device_ids: string[];
 	    config_type: string;
 	    credential_id: string;
+	    username: string;
+	    password: string;
+	    ip_list: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new BackupRequest(source);
@@ -159,6 +162,9 @@ export namespace main {
 	        this.device_ids = source["device_ids"];
 	        this.config_type = source["config_type"];
 	        this.credential_id = source["credential_id"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.ip_list = source["ip_list"];
 	    }
 	}
 	export class CredentialInput {

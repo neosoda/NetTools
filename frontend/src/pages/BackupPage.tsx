@@ -4,6 +4,7 @@ import { Play, Eye, Terminal, RefreshCw, Send, Clock, List } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Select from '../components/Select'
+import Input from '../components/Input'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import { formatDate, formatBytes } from '../lib/utils'
@@ -16,18 +17,28 @@ type DeviceSource = 'inventory' | 'last_scan' | 'manual'
 
 export default function BackupPage() {
   const { globalCredId } = useGlobalCredential()
+
+  // Source des équipements
+  const [deviceSource, setDeviceSource] = useState<DeviceSource>('manual')
   const [selectedDevices, setSelectedDevices] = useState<string[]>([])
-  const [configType, setConfigType] = useState('running')
-  const [viewBackup, setViewBackup] = useState<string | null>(null)
-  const [backupContent, setBackupContent] = useState('')
-  const [selectedDevice, setSelectedDevice] = useState('')
-  const [deviceSource, setDeviceSource] = useState<DeviceSource>('inventory')
   const [lastScanDevices, setLastScanDevices] = useState<any[]>([])
   const [manualIpText, setManualIpText] = useState('')
   const [manualDevices, setManualDevices] = useState<any[]>([])
+
+  // Credentials SSH inline
+  const [sshUser, setSshUser] = useState('')
+  const [sshPassword, setSshPassword] = useState('')
+
+  // Config
+  const [configType, setConfigType] = useState('running')
   const [backupProgress, setBackupProgress] = useState<Record<string, any>>({})
 
-  // Terminal state
+  // Historique
+  const [selectedDevice, setSelectedDevice] = useState('')
+  const [viewBackup, setViewBackup] = useState<string | null>(null)
+  const [backupContent, setBackupContent] = useState('')
+
+  // Terminal
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalDevice, setTerminalDevice] = useState('')
   const [terminalCommand, setTerminalCommand] = useState('show version')
@@ -46,7 +57,7 @@ export default function BackupPage() {
     queryFn: async () => { const m = await getBackend(); return m.GetBackups(selectedDevice) },
   })
 
-  // Load devices when source or allDevices changes
+  // Auto-select devices when source or allDevices changes
   useEffect(() => {
     if (deviceSource === 'last_scan') {
       getBackend().then(m => m.GetLastScanDevices()).then(devs => {
@@ -54,23 +65,13 @@ export default function BackupPage() {
         setSelectedDevices((devs || []).map((d: any) => d.id))
       })
     } else if (deviceSource === 'inventory') {
-      // allDevices loads async — re-run when it arrives
       setSelectedDevices((allDevices as any[]).map((d: any) => d.id))
     } else if (deviceSource === 'manual') {
-      // manual mode: selection managed by handleResolveManualIPs, don't reset here
+      // manual: managed by handleResolveManualIPs
     }
   }, [deviceSource, allDevices])
 
-  // Resolve manual IPs to known devices
-  const handleResolveManualIPs = async () => {
-    const ips = manualIpText.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
-    if (!ips.length) return
-    const m = await getBackend()
-    const found = await m.GetDevicesByIPs(ips)
-    setManualDevices(found || [])
-    setSelectedDevices((found || []).map((d: any) => d.id))
-  }
-
+  // Events
   useEffect(() => {
     const unsub = EventsOn('backup:progress', (data: any) => {
       setBackupProgress(prev => ({ ...prev, [data.device_id]: data }))
@@ -89,6 +90,15 @@ export default function BackupPage() {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [terminalLines])
 
+  const handleResolveManualIPs = async () => {
+    const ips = manualIpText.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean)
+    if (!ips.length) return
+    const m = await getBackend()
+    const found = await m.GetDevicesByIPs(ips)
+    setManualDevices(found || [])
+    setSelectedDevices((found || []).map((d: any) => d.id))
+  }
+
   const devices =
     deviceSource === 'last_scan' ? lastScanDevices :
     deviceSource === 'manual' ? manualDevices :
@@ -98,7 +108,28 @@ export default function BackupPage() {
     mutationFn: async () => {
       const m = await getBackend()
       setBackupProgress({})
-      return m.RunBackup({ device_ids: selectedDevices, config_type: configType, credential_id: globalCredId })
+
+      // Mode manuel sans résolution : passer les IPs directement
+      if (deviceSource === 'manual' && manualDevices.length === 0 && manualIpText.trim()) {
+        const ipList = manualIpText.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean)
+        return m.RunBackup({
+          device_ids: [],
+          ip_list: ipList,
+          config_type: configType,
+          credential_id: globalCredId,
+          username: sshUser,
+          password: sshPassword,
+        })
+      }
+
+      return m.RunBackup({
+        device_ids: selectedDevices,
+        ip_list: [],
+        config_type: configType,
+        credential_id: globalCredId,
+        username: sshUser,
+        password: sshPassword,
+      })
     },
     onSuccess: () => refetchBackups(),
   })
@@ -139,11 +170,16 @@ export default function BackupPage() {
   const toggleDevice = (id: string) =>
     setSelectedDevices(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
-  const terminalDeviceLabel = devices.find((d: any) => d.id === terminalDevice)
+  const terminalDeviceLabel = (allDevices as any[]).find((d: any) => d.id === terminalDevice)
+
+  // Can launch if: manual IPs typed OR devices selected
+  const canLaunch = deviceSource === 'manual' && manualDevices.length === 0
+    ? manualIpText.trim().length > 0
+    : selectedDevices.length > 0
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader title="Gestionnaire de backups" description="Sauvegarder et exporter les configurations" />
+      <PageHeader title="Gestionnaire de backups" description="Sauvegarder les configurations réseau" />
       <div className="flex-1 overflow-auto p-6 space-y-4">
 
         {/* Backup launcher */}
@@ -152,14 +188,35 @@ export default function BackupPage() {
             <h2 className="text-sm font-semibold text-slate-300">Lancer un backup</h2>
             {/* Source selector */}
             <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
-              {(['inventory', 'last_scan', 'manual'] as DeviceSource[]).map(mode => (
+              {(['manual', 'last_scan', 'inventory'] as DeviceSource[]).map(mode => (
                 <button key={mode} onClick={() => setDeviceSource(mode)}
                   className={`px-3 py-1 rounded-md text-xs transition-colors ${deviceSource === mode ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                  {mode === 'inventory' ? 'Inventaire' : mode === 'last_scan' ? 'Dernier scan' : 'Liste manuelle'}
+                  {mode === 'manual' ? 'Saisie manuelle' : mode === 'last_scan' ? 'Dernier scan' : 'Inventaire'}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* SSH credentials inline */}
+          <div className="grid grid-cols-3 gap-3">
+            <Input label="Utilisateur SSH" value={sshUser} onChange={e => setSshUser(e.target.value)}
+              placeholder="admin" />
+            <Input label="Mot de passe SSH" type="password" value={sshPassword} onChange={e => setSshPassword(e.target.value)}
+              placeholder="••••••••" />
+            <Select label="Type de config" value={configType} options={configTypeOptions}
+              onChange={e => setConfigType(e.target.value)} />
+          </div>
+
+          {sshUser === '' && !globalCredId && (
+            <p className="text-xs text-amber-400">
+              Renseignez un utilisateur SSH ci-dessus ou sélectionnez un credential dans le menu de gauche.
+            </p>
+          )}
+          {(sshUser !== '' || globalCredId) && (
+            <p className="text-xs text-green-400">
+              {sshUser !== '' ? `Connexion avec l'utilisateur "${sshUser}"` : 'Credential actif depuis le menu de gauche'}
+            </p>
+          )}
 
           {/* Manual IP input */}
           {deviceSource === 'manual' && (
@@ -167,32 +224,27 @@ export default function BackupPage() {
               <label className="text-xs font-medium text-slate-400 block">
                 Liste d'IPs (une par ligne ou séparées par virgule)
               </label>
-              <div className="flex gap-2">
-                <textarea value={manualIpText} onChange={e => setManualIpText(e.target.value)}
+              <div className="flex gap-2 items-start">
+                <textarea value={manualIpText} onChange={e => { setManualIpText(e.target.value); setManualDevices([]) }}
                   placeholder={"10.113.76.1\n10.113.76.2\n10.113.76.3"}
                   className="flex-1 bg-slate-800 border border-slate-700 rounded-md p-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500 resize-none"
-                  rows={3} />
-                <Button variant="secondary" onClick={handleResolveManualIPs}>
-                  <List className="w-4 h-4" /> Résoudre
+                  rows={4} />
+                <Button variant="secondary" onClick={handleResolveManualIPs} title="Chercher dans l'inventaire">
+                  <List className="w-4 h-4" />
                 </Button>
               </div>
               {manualDevices.length > 0 && (
                 <p className="text-xs text-green-400">{manualDevices.length} équipement(s) trouvé(s) dans l'inventaire</p>
               )}
               {manualIpText && manualDevices.length === 0 && (
-                <p className="text-xs text-amber-400">Cliquez "Résoudre" pour chercher les équipements correspondants</p>
+                <p className="text-xs text-slate-500">Les IPs seront contactées directement (sans inventaire)</p>
               )}
             </div>
           )}
 
-          {deviceSource === 'last_scan' && lastScanDevices.length === 0 && (
-            <p className="text-xs text-amber-400">Aucun scan récent. Lancez d'abord une découverte réseau.</p>
-          )}
-
-          <div className="flex gap-4 items-end">
-            <Select label="Type de config" value={configType} options={configTypeOptions}
-              onChange={e => setConfigType(e.target.value)} />
-            <div className="flex-1">
+          {/* Last scan / inventory device list */}
+          {deviceSource !== 'manual' && (
+            <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-medium text-slate-400">
                   Équipements ({selectedDevices.length}/{devices.length} sélectionnés)
@@ -217,26 +269,27 @@ export default function BackupPage() {
                     </button>
                   )
                 })}
-                {devices.length === 0 && (
-                  <p className="text-xs text-slate-500 italic">Aucun équipement sélectionné.</p>
+                {devices.length === 0 && deviceSource === 'last_scan' && (
+                  <p className="text-xs text-amber-400">Aucun scan récent. Lancez d'abord une découverte réseau.</p>
+                )}
+                {devices.length === 0 && deviceSource === 'inventory' && (
+                  <p className="text-xs text-slate-500">Inventaire vide. Utilisez le mode "Saisie manuelle".</p>
                 )}
               </div>
             </div>
-            <Button variant="primary" loading={backupMutation.isPending}
-              disabled={selectedDevices.length === 0} onClick={() => backupMutation.mutate()}>
-              <Play className="w-4 h-4" /> Lancer
-            </Button>
-          </div>
-
-          {globalCredId && (
-            <p className="text-xs text-blue-400">Credential actif depuis la barre latérale (override par équipement)</p>
           )}
+
+          <Button variant="primary" loading={backupMutation.isPending}
+            disabled={!canLaunch} onClick={() => backupMutation.mutate()}>
+            <Play className="w-4 h-4" /> Lancer le backup
+          </Button>
 
           {/* Progress summary */}
           {Object.keys(backupProgress).length > 0 && (
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800">
               {Object.entries(backupProgress).map(([id, prog]: any) => {
                 const dev = devices.find((d: any) => d.id === id)
+                const label = dev?.hostname || dev?.ip || prog.device_ip || id
                 return (
                   <div key={id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs border ${
                     prog.status === 'success' ? 'bg-green-900/20 border-green-800' :
@@ -245,8 +298,8 @@ export default function BackupPage() {
                     {prog.status === 'running' && <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />}
                     {prog.status === 'success' && <span className="text-green-400">✓</span>}
                     {prog.status === 'failed' && <span className="text-red-400">✗</span>}
-                    <span className="truncate text-slate-300">{dev?.hostname || dev?.ip || id}</span>
-                    {prog.error && <span className="text-red-400 truncate">{prog.error}</span>}
+                    <span className="truncate text-slate-300">{label}</span>
+                    {prog.error && <span className="text-red-400 truncate ml-1" title={prog.error}>⚠</span>}
                   </div>
                 )
               })}
@@ -254,24 +307,24 @@ export default function BackupPage() {
           )}
         </div>
 
-        {/* History */}
+        {/* Historique */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-800 flex justify-between items-center">
             <h2 className="text-sm font-semibold text-slate-300">Historique & Terminal</h2>
-            <Select value={selectedDevice} className="w-48 py-1"
-              options={[{ value: '', label: 'Sélectionner...' }, ...(allDevices as any[]).map((d: any) => ({ value: d.id, label: d.hostname || d.ip }))]}
+            <Select value={selectedDevice} className="w-52 py-1"
+              options={[{ value: '', label: 'Sélectionner un équipement...' }, ...(allDevices as any[]).map((d: any) => ({ value: d.id, label: `${d.hostname || d.ip} (${d.ip})` }))]}
               onChange={e => setSelectedDevice(e.target.value)} />
           </div>
           {selectedDevice ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-slate-400 border-b border-slate-800">
-                  <th className="text-left p-3 font-medium">Date</th>
-                  <th className="text-left p-3 font-medium">Type</th>
-                  <th className="text-left p-3 font-medium">Statut</th>
-                  <th className="text-left p-3 font-medium">Taille</th>
-                  <th className="text-left p-3 font-medium">Durée</th>
-                  <th className="text-left p-3 font-medium">Actions</th>
+                  <th className="text-left p-3">Date</th>
+                  <th className="text-left p-3">Type</th>
+                  <th className="text-left p-3">Statut</th>
+                  <th className="text-left p-3">Taille</th>
+                  <th className="text-left p-3">Durée</th>
+                  <th className="text-left p-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -292,7 +345,7 @@ export default function BackupPage() {
                         </Button>
                       )}
                       <Button size="sm" variant="ghost" onClick={() => handleOpenTerminal(selectedDevice)}
-                        title="Ouvrir un terminal SSH">
+                        title="Terminal SSH">
                         <Terminal className="w-3.5 h-3.5 text-green-400" />
                       </Button>
                     </td>
@@ -317,7 +370,7 @@ export default function BackupPage() {
         </div>
       </div>
 
-      {/* Backup content modal */}
+      {/* Modal contenu backup */}
       <Modal open={!!viewBackup} onClose={() => setViewBackup(null)} title="Contenu du backup" size="xl">
         <pre className="text-xs text-slate-300 bg-slate-950 p-4 rounded-lg overflow-auto max-h-[60vh] font-mono">
           {backupContent}
@@ -330,15 +383,10 @@ export default function BackupPage() {
         size="xl">
         <div className="space-y-3">
           <div className="flex gap-2">
-            <div className="flex-1">
-              <input
-                value={terminalCommand}
-                onChange={e => setTerminalCommand(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !terminalRunning) handleRunTerminal() }}
-                placeholder="Commande SSH (ex: show version)"
-                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-blue-500"
-              />
-            </div>
+            <input value={terminalCommand} onChange={e => setTerminalCommand(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !terminalRunning) handleRunTerminal() }}
+              placeholder="Commande SSH (ex: show version)"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-blue-500" />
             <Button variant="primary" loading={terminalRunning} onClick={handleRunTerminal}>
               <Send className="w-4 h-4" /> Envoyer
             </Button>
