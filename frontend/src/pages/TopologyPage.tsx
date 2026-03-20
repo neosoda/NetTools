@@ -5,8 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
-
-import backend from '../lib/backend'
+import { getBackend } from '../lib/backend'
 
 function vendorColor(vendor: string) {
   switch (vendor) {
@@ -23,7 +22,7 @@ export default function TopologyPage() {
 
   const { data: graph, isLoading, refetch } = useQuery({
     queryKey: ['topology'],
-    queryFn: () => backend.GetTopology(),
+    queryFn: async () => { const m = await getBackend(); return m.GetTopology() },
   })
 
   useEffect(() => {

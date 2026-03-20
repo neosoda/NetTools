@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -34,6 +36,6 @@ func main() {
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 	}
 }

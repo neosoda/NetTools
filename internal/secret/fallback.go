@@ -61,6 +61,8 @@ func fallbackKey() []byte {
 	if seed == "" {
 		hostname, _ := os.Hostname()
 		seed = "networktools-" + hostname
+		// WARNING: Using hostname-based key derivation. Set NETWORKTOOLS_SECRET_KEY for production security.
+		fmt.Fprintf(os.Stderr, "WARNING: NETWORKTOOLS_SECRET_KEY not set, using hostname-derived key. Credentials encryption is weak.\n")
 	}
 	h := sha256.Sum256([]byte(seed))
 	return h[:]

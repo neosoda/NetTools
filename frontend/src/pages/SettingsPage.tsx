@@ -7,11 +7,14 @@ import Input from '../components/Input'
 import Select from '../components/Select'
 import Modal from '../components/Modal'
 import backend from '../lib/backend'
+import { useToast } from '../components/Toast'
 
 export default function SettingsPage() {
+  const { toast } = useToast()
   const [settings, setSettings] = useState<any>(null)
   const [showCredModal, setShowCredModal] = useState(false)
   const [editCred, setEditCred] = useState<any>(null)
+  const [confirmDeleteCredId, setConfirmDeleteCredId] = useState<string | null>(null)
 
   const { data: fetchedSettings } = useQuery({ queryKey: ['settings'], queryFn: () => backend.GetSettings() })
   const { data: credentials = [], refetch: refetchCreds } = useQuery({ queryKey: ['credentials'], queryFn: () => backend.GetCredentials() })
@@ -20,7 +23,10 @@ export default function SettingsPage() {
     if (fetchedSettings && !settings) setSettings(fetchedSettings)
   }, [fetchedSettings, settings])
 
-  const saveMutation = useMutation({ mutationFn: (s: any) => backend.SaveSettings(s) })
+  const saveMutation = useMutation({
+    mutationFn: (s: any) => backend.SaveSettings(s),
+    onSuccess: () => toast('Paramètres sauvegardés', 'success'),
+  })
   const saveCredMutation = useMutation({
     mutationFn: (cred: any) => backend.SaveCredential(cred),
     onSuccess: () => { refetchCreds(); setShowCredModal(false) },
@@ -81,7 +87,14 @@ export default function SettingsPage() {
                   </td>
                   <td className="p-3 flex gap-1">
                     <Button size="sm" variant="ghost" onClick={() => { setEditCred(c); setShowCredModal(true) }}>Éditer</Button>
-                    <Button size="sm" variant="ghost" onClick={() => deleteCredMutation.mutate(c.id)}><span className="text-red-400 text-xs">Suppr.</span></Button>
+                    {confirmDeleteCredId === c.id ? (
+                      <span className="flex items-center gap-1">
+                        <Button size="sm" variant="danger" onClick={() => { deleteCredMutation.mutate(c.id); setConfirmDeleteCredId(null) }}>Oui</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteCredId(null)}>Non</Button>
+                      </span>
+                    ) : (
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteCredId(c.id)}><span className="text-red-400 text-xs">Suppr.</span></Button>
+                    )}
                   </td>
                 </tr>
               ))}

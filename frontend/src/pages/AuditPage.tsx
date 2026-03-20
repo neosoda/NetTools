@@ -6,8 +6,7 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Select from '../components/Select'
-
-import backend from '../lib/backend'
+import { getBackend } from '../lib/backend'
 
 type DeviceSource = 'last_scan' | 'manual'
 
@@ -29,20 +28,10 @@ export default function AuditPage() {
 
   const { data: rules = [] } = useQuery({
     queryKey: ['audit-rules'],
-    queryFn: () => backend.GetAuditRules(),
+    queryFn: async () => { const m = await getBackend(); return m.GetAuditRules() },
   } as any)
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('audit:selectedRules')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as string[]
-        if (parsed.length > 0) {
-          setSelectedRules(parsed)
-          return
-        }
-      } catch {}
-    }
     const ruleList = rules as any[]
     if (ruleList.length > 0 && selectedRules.length === 0) {
       setSelectedRules(ruleList.map((r: any) => r.id))
@@ -50,12 +39,8 @@ export default function AuditPage() {
   }, [rules])
 
   useEffect(() => {
-    sessionStorage.setItem('audit:selectedRules', JSON.stringify(selectedRules))
-  }, [selectedRules])
-
-  useEffect(() => {
     if (deviceSource === 'last_scan') {
-      Promise.resolve(backend.GetLastScanDevices()).then(devs => {
+      getBackend().then(m => m.GetLastScanDevices()).then(devs => {
         setLastScanDevices(devs || [])
         setSelectedDevices((devs || []).map((d: any) => d.id))
       })
@@ -69,7 +54,7 @@ export default function AuditPage() {
 
   const auditMutation = useMutation({
     mutationFn: async () => {
-      const m = backend
+      const m = await getBackend()
       const allRuleIDs = (rules as any[]).map((r: any) => r.id)
       const useFiltered = selectedRules.length < allRuleIDs.length
 
@@ -86,12 +71,12 @@ export default function AuditPage() {
   })
 
   const saveRuleMutation = useMutation({
-    mutationFn: (rule: any) => backend.SaveAuditRule(rule),
+    mutationFn: async (rule: any) => { const m = await getBackend(); return m.SaveAuditRule(rule) },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['audit-rules'] }); setShowRuleModal(false) },
   })
 
   const deleteRuleMutation = useMutation({
-    mutationFn: (id: string) => backend.DeleteAuditRule(id),
+    mutationFn: async (id: string) => { const m = await getBackend(); return m.DeleteAuditRule(id) },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['audit-rules'] }),
   })
 

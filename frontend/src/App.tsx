@@ -8,6 +8,7 @@ import {
 import { cn } from './lib/utils'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { CredentialProvider, useGlobalCredential } from './context/CredentialContext'
+import { ToastProvider } from './components/Toast'
 import backend from './lib/backend'
 
 import ScanPage from './pages/ScanPage'
@@ -128,7 +129,7 @@ function AppContent() {
             </button>
           )}
           {stopStatus && <p className="text-xs text-center text-green-400">{stopStatus}</p>}
-          <p className="text-xs text-slate-600 text-center">v1.2.0</p>
+          <p className="text-xs text-slate-600 text-center">v1.3.0</p>
         </div>
       </nav>
 
@@ -153,8 +154,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <CredentialProvider>
-      <AppContent />
-    </CredentialProvider>
+    <ToastProvider>
+      <CredentialProvider>
+        <AppContent />
+      </CredentialProvider>
+    </ToastProvider>
   )
 }

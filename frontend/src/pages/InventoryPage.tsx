@@ -6,14 +6,9 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Select from '../components/Select'
-import StatusBadge from '../components/StatusBadge'
 import { formatDate } from '../lib/utils'
-
-// We use dynamic import to avoid issues at startup if wailsjs not generated yet
-async function getBackend() {
-  const m = await import('../../wailsjs/go/main/App')
-  return m
-}
+import backend from '../lib/backend'
+import { useToast } from '../components/Toast'
 
 interface Device {
   id: string; ip: string; hostname: string; vendor: string; model: string
@@ -34,33 +29,26 @@ const vendorOptions = [
 
 export default function InventoryPage() {
   const qc = useQueryClient()
+  const { toast } = useToast()
   const [showModal, setShowModal] = useState(false)
   const [editDevice, setEditDevice] = useState<Partial<Device> | null>(null)
   const [testing, setTesting] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const { data: devices = [], isLoading } = useQuery({
     queryKey: ['devices'],
-    queryFn: async () => {
-      const m = await getBackend()
-      return m.GetDevices()
-    },
+    queryFn: () => backend.GetDevices(),
   })
 
   const { data: credentials = [] } = useQuery({
     queryKey: ['credentials'],
-    queryFn: async () => {
-      const m = await getBackend()
-      return m.GetCredentials()
-    },
+    queryFn: () => backend.GetCredentials(),
   })
 
   const saveMutation = useMutation({
-    mutationFn: async (device: Partial<Device>) => {
-      const m = await getBackend()
-      return m.SaveDevice(device as any)
-    },
+    mutationFn: (device: Partial<Device>) => backend.SaveDevice(device as any),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['devices'] })
       setShowModal(false)
@@ -69,18 +57,12 @@ export default function InventoryPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const m = await getBackend()
-      return m.DeleteDevice(id)
-    },
+    mutationFn: (id: string) => backend.DeleteDevice(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['devices'] }),
   })
 
   const clearMutation = useMutation({
-    mutationFn: async () => {
-      const m = await getBackend()
-      return m.ClearInventory()
-    },
+    mutationFn: () => backend.ClearInventory(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['devices'] })
       setConfirmClear(false)
@@ -89,26 +71,25 @@ export default function InventoryPage() {
 
   const handleTest = async (deviceId: string) => {
     setTesting(deviceId)
-    const m = await getBackend()
-    const result = await m.TestDeviceConnection(deviceId)
+    const result = await backend.TestDeviceConnection(deviceId)
     setTesting(null)
-    alert(result.success ? '✅ Connexion SSH réussie' : '❌ Échec: ' + result.error)
+    toast(result.success ? 'Connexion SSH réussie' : 'Échec: ' + result.error, result.success ? 'success' : 'error')
   }
 
-  const filtered = devices.filter((d: Device) =>
+  const filtered = (devices as Device[]).filter(d =>
     !search || d.ip?.includes(search) || d.hostname?.toLowerCase().includes(search.toLowerCase())
   )
 
   const credOptions = [
     { value: '', label: '— Aucune —' },
-    ...(credentials as Credential[]).map((c: Credential) => ({ value: c.id, label: c.name })),
+    ...(credentials as Credential[]).map(c => ({ value: c.id, label: c.name })),
   ]
 
   return (
     <div className="flex flex-col h-full">
       <PageHeader
         title="Inventaire"
-        description={`${devices.length} équipements`}
+        description={`${(devices as Device[]).length} équipements`}
         actions={
           <div className="flex gap-2">
             <Input
@@ -159,7 +140,7 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((device: Device) => (
+              {filtered.map(device => (
                 <tr key={device.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="py-2.5 pl-2 font-mono text-blue-400">{device.ip}</td>
                   <td className="py-2.5 text-slate-200">{device.hostname || '—'}</td>
@@ -179,9 +160,16 @@ export default function InventoryPage() {
                       <Button size="sm" variant="ghost" loading={testing === device.id} onClick={() => handleTest(device.id)}>
                         <Plug className="w-3.5 h-3.5" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deleteMutation.mutate(device.id)}>
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                      </Button>
+                      {confirmDeleteId === device.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="danger" onClick={() => { deleteMutation.mutate(device.id); setConfirmDeleteId(null) }}>Oui</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(null)}>Non</Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(device.id)}>
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
