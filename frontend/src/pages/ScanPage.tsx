@@ -5,8 +5,7 @@ import Button from '../components/Button'
 import Input from '../components/Input'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useGlobalCredential } from '../context/CredentialContext'
-
-import backend from '../lib/backend'
+import { getBackend } from '../lib/backend'
 
 function formatUptime(seconds: number) {
   if (!seconds || seconds <= 0) return '—'
@@ -45,7 +44,6 @@ export default function ScanPage() {
   const [testing, setTesting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const resultDeviceIds = useRef<string[]>([])
-  const [snmpVersion, setSnmpVersion] = useState<'v2c' | 'v3'>('v2c')
 
   useEffect(() => {
     const unsub1 = EventsOn('scan:progress', (data: any) => setProgress(data))
@@ -76,11 +74,11 @@ export default function ScanPage() {
     }
 
     try {
-      const discovered = await backend.ScanNetwork({
+      const m = await getBackend()
+      const discovered = await m.ScanNetwork({
         cidr: scanCidr,
         ip_list: ipList,
         community: community.trim() || 'TICE',
-        version: snmpVersion,
         credential_id: globalCredId,
         workers: parseInt(workers),
         timeout_sec: parseInt(timeout),
@@ -98,7 +96,8 @@ export default function ScanPage() {
   }
 
   const handleStop = async () => {
-    await backend.StopAllTasks()
+    const m = await getBackend()
+    await m.StopAllTasks()
     setScanning(false)
     setProgress(null)
   }
@@ -108,7 +107,8 @@ export default function ScanPage() {
     setTesting(true)
     setTestResult(null)
     try {
-      const r = await backend.TestSNMPHost(testIp.trim(), community.trim() || 'TICE', snmpVersion, parseInt(timeout))
+      const m = await getBackend()
+      const r = await m.TestSNMPHost(testIp.trim(), community.trim() || 'TICE', 'v2c', parseInt(timeout))
       setTestResult(r)
     } finally {
       setTesting(false)
@@ -118,8 +118,8 @@ export default function ScanPage() {
   const handleExportExcel = async () => {
     setExporting(true)
     try {
-      const exportIDs = [...resultDeviceIds.current]
-      await backend.ExportScanToExcel(exportIDs)
+      const m = await getBackend()
+      await m.ExportScanToExcel(resultDeviceIds.current)
     } catch (e: any) {
       setError('Export Excel : ' + (e?.message || String(e)))
     } finally {
@@ -173,17 +173,8 @@ export default function ScanPage() {
                 <p className="text-xs text-slate-500 mt-1">{scanModeDesc[scanMode]}</p>
               </div>
             )}
-            <div>
-              <Input label="Communauté SNMP" value={community} onChange={e => setCommunity(e.target.value)}
+            <Input label="Communauté SNMP" value={community} onChange={e => setCommunity(e.target.value)}
               placeholder="TICE" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-400 block mb-1.5">Version SNMP</label>
-              <select value={snmpVersion} onChange={e => setSnmpVersion(e.target.value as 'v2c' | 'v3')} className="w-full h-10 rounded-md border border-slate-700 bg-slate-800 px-3 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
-                <option value="v2c">SNMPv2c</option>
-                <option value="v3">SNMPv3</option>
-              </select>
-            </div>
             <Input label="Timeout par IP (s)" type="number" min="1" max="30"
               value={timeout} onChange={e => setTimeoutVal(e.target.value)} />
             <Input label="Workers parallèles" type="number" min="1" max="200"

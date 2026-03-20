@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
+	"net"
 	"sync"
 	"time"
 
@@ -28,8 +27,8 @@ import (
 	"networktools/internal/topology"
 
 	"github.com/google/uuid"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 )
 
@@ -105,12 +104,23 @@ func (a *App) startup(ctx context.Context) {
 	})
 	a.sched.Start(ctx)
 
-	if settings, err := a.GetSettings(); err == nil {
-		a.applySettings(*settings)
-	}
-	go a.startLogRetentionWorker(ctx)
+	// Clean old logs based on retention setting
+	a.cleanOldLogs()
 
 	logger.Info("NetworkTools démarré")
+}
+
+// cleanOldLogs removes audit log entries older than retention days
+func (a *App) cleanOldLogs() {
+	settings, err := a.GetSettings()
+	if err != nil || settings.LogRetentionDays <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -settings.LogRetentionDays)
+	result := db.DB.Where("created_at < ?", cutoff).Delete(&models.AuditLog{})
+	if result.RowsAffected > 0 {
+		logger.Info(fmt.Sprintf("nettoyage: %d anciens logs supprimés (rétention %d jours)", result.RowsAffected, settings.LogRetentionDays))
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -278,28 +288,19 @@ type CredentialInput struct {
 }
 
 func (a *App) SaveCredential(input CredentialInput) (*models.CredentialView, error) {
-	if strings.TrimSpace(input.Name) == "" {
-		return nil, fmt.Errorf("le nom du credential est requis")
+	cred := models.Credential{
+		Name:             input.Name,
+		Username:         input.Username,
+		SNMPVersion:      input.SNMPVersion,
+		SNMPAuthProtocol: input.SNMPAuthProtocol,
+		SNMPPrivProtocol: input.SNMPPrivProtocol,
+		SNMPUsername:     input.SNMPUsername,
 	}
 
-	cred := models.Credential{}
 	if input.ID != "" {
-		if err := db.DB.First(&cred, "id = ?", input.ID).Error; err != nil {
-			return nil, err
-		}
+		cred.ID = input.ID
 	} else {
 		cred.ID = uuid.NewString()
-	}
-
-	cred.Name = strings.TrimSpace(input.Name)
-	cred.Username = strings.TrimSpace(input.Username)
-	cred.SNMPVersion = normalizeSNMPVersion(input.SNMPVersion)
-	cred.SNMPAuthProtocol = strings.ToUpper(strings.TrimSpace(input.SNMPAuthProtocol))
-	cred.SNMPPrivProtocol = strings.ToUpper(strings.TrimSpace(input.SNMPPrivProtocol))
-	cred.SNMPUsername = strings.TrimSpace(input.SNMPUsername)
-
-	if cred.SNMPVersion == "v3" && cred.SNMPUsername == "" {
-		return nil, fmt.Errorf("le nom d'utilisateur SNMPv3 est requis")
 	}
 
 	var err error
@@ -380,40 +381,15 @@ func (a *App) getCredentials(credentialID string) (username, password, privateKe
 	return
 }
 
-func (a *App) getSNMPCredentials(credentialID string) (*models.Credential, string, string, string, error) {
+func (a *App) getSNMPCommunity(credentialID string) (string, error) {
 	var cred models.Credential
 	if err := db.DB.First(&cred, "id = ?", credentialID).Error; err != nil {
-		return nil, "", "", "", err
+		return "", err
 	}
-
-	community := ""
-	if len(cred.SNMPCommunityEnc) > 0 {
-		decrypted, err := a.secretMgr.Decrypt(cred.SNMPCommunityEnc)
-		if err != nil {
-			return nil, "", "", "", err
-		}
-		community = decrypted
+	if len(cred.SNMPCommunityEnc) == 0 {
+		return "TICE", nil
 	}
-
-	authKey := ""
-	if len(cred.SNMPAuthEnc) > 0 {
-		decrypted, err := a.secretMgr.Decrypt(cred.SNMPAuthEnc)
-		if err != nil {
-			return nil, "", "", "", err
-		}
-		authKey = decrypted
-	}
-
-	privKey := ""
-	if len(cred.SNMPPrivEnc) > 0 {
-		decrypted, err := a.secretMgr.Decrypt(cred.SNMPPrivEnc)
-		if err != nil {
-			return nil, "", "", "", err
-		}
-		privKey = decrypted
-	}
-
-	return &cred, community, authKey, privKey, nil
+	return a.secretMgr.Decrypt(cred.SNMPCommunityEnc)
 }
 
 // ─────────────────────────────────────────────
@@ -423,51 +399,44 @@ func (a *App) getSNMPCredentials(credentialID string) (*models.Credential, strin
 // ScanRequest is the input for a network scan
 type ScanRequest struct {
 	CIDR         string   `json:"cidr"`
-	IPList       []string `json:"ip_list"` // Manual list of IPs (alternative to CIDR)
+	IPList       []string `json:"ip_list"`    // Manual list of IPs (alternative to CIDR)
 	Community    string   `json:"community"`
-	Version      string   `json:"version"`
 	CredentialID string   `json:"credential_id"`
 	Workers      int      `json:"workers"`
 	TimeoutSec   int      `json:"timeout_sec"`
 }
 
 func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
-	var (
-		cred      *models.Credential
-		community = "TICE"
-		version   = normalizeSNMPVersion(req.Version)
-		authKey   string
-		privKey   string
-	)
-	if version == "" {
-		version = "v2c"
+	community := "TICE"
+	version := "v2c"
+
+	// Priority: explicit community > credential > default
+	if req.Community != "" {
+		community = req.Community
+	} else if req.CredentialID != "" {
+		comm, err := a.getSNMPCommunity(req.CredentialID)
+		if err == nil {
+			community = comm
+		}
 	}
 
-	if req.CredentialID != "" {
-		loadedCred, loadedCommunity, loadedAuthKey, loadedPrivKey, err := a.getSNMPCredentials(req.CredentialID)
-		if err == nil {
-			cred = loadedCred
-			authKey = loadedAuthKey
-			privKey = loadedPrivKey
-			if loadedCommunity != "" {
-				community = loadedCommunity
+	// Validate inputs
+	if req.CIDR != "" {
+		if !strings.Contains(req.CIDR, "/") {
+			// Single IP - validate format
+			if net.ParseIP(req.CIDR) == nil {
+				return nil, fmt.Errorf("adresse IP invalide: %s", req.CIDR)
 			}
-			if version == "v2c" && cred.SNMPVersion != "" {
-				version = normalizeSNMPVersion(cred.SNMPVersion)
+		} else {
+			if _, _, err := net.ParseCIDR(req.CIDR); err != nil {
+				return nil, fmt.Errorf("CIDR invalide: %w", err)
 			}
 		}
 	}
-	if strings.TrimSpace(req.Community) != "" {
-		community = strings.TrimSpace(req.Community)
-	}
-
-	manualIPs, err := normalizeManualIPs(req.IPList)
-	if err != nil {
-		return nil, err
-	}
-	if len(manualIPs) == 0 {
-		if err := validateCIDR(req.CIDR); err != nil {
-			return nil, err
+	for _, ip := range req.IPList {
+		ip = strings.TrimSpace(ip)
+		if ip != "" && net.ParseIP(ip) == nil {
+			return nil, fmt.Errorf("adresse IP invalide dans la liste: %s", ip)
 		}
 	}
 
@@ -498,20 +467,13 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 	}
 
 	params := snmp.ScanParams{
-		CIDR:      strings.TrimSpace(req.CIDR),
-		IPs:       manualIPs,
+		CIDR:      req.CIDR,
+		IPs:       req.IPList,
 		Community: community,
 		Version:   version,
 		Workers:   workers,
 		Timeout:   time.Duration(timeoutSec) * time.Second,
-		RateDelay: 0,
-	}
-	if cred != nil && version == "v3" {
-		params.Username = cred.SNMPUsername
-		params.AuthProto = cred.SNMPAuthProtocol
-		params.AuthKey = authKey
-		params.PrivProto = cred.SNMPPrivProtocol
-		params.PrivKey = privKey
+		RateDelay: 50 * time.Millisecond,
 	}
 
 	start := time.Now()
@@ -560,20 +522,20 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 			existing.OSVersion = device.OSVersion
 			existing.UptimeSeconds = device.UptimeSeconds
 			existing.LastSeenAt = &now
-			existing.SNMPVersion = device.SNMPVersion
 			db.DB.Save(&existing)
 			discovered = append(discovered, existing)
 			discoveredIDs = append(discoveredIDs, existing.ID)
 		}
 	}
 
+	// Save last scan device IDs
 	a.mu.Lock()
 	a.lastScanIDs = discoveredIDs
 	a.mu.Unlock()
 
 	scanTarget := req.CIDR
-	if len(manualIPs) > 0 {
-		scanTarget = fmt.Sprintf("%d IPs manuelles", len(manualIPs))
+	if len(req.IPList) > 0 {
+		scanTarget = fmt.Sprintf("%d IPs manuelles", len(req.IPList))
 	}
 	logger.AuditAction(a.ctx, "network_scan", "scan", scanTarget,
 		fmt.Sprintf(`{"found":%d,"duration_ms":%d}`, len(discovered), time.Since(start).Milliseconds()),
@@ -995,6 +957,12 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 		})
 	}
 
+	// Build device ID -> IP map for O(1) lookups in callbacks
+	deviceIPMap := make(map[string]string, len(devices))
+	for _, d := range devices {
+		deviceIPMap[d.ID] = d.IP
+	}
+
 	// Run backups concurrently (5 workers by default)
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Minute)
 	defer cancel()
@@ -1018,12 +986,7 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 		}
 
 		// Find device IP for the event
-		for _, d := range devices {
-			if d.ID == deviceID {
-				deviceIP = d.IP
-				break
-			}
-		}
+		deviceIP = deviceIPMap[deviceID]
 
 		runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
 			"device_id": deviceID,
@@ -1052,12 +1015,7 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 		if br.Backup != nil {
 			deviceID = br.Backup.DeviceID
 		}
-		for _, d := range devices {
-			if d.ID == deviceID {
-				deviceIP = d.IP
-				break
-			}
-		}
+		deviceIP = deviceIPMap[deviceID]
 		logger.AuditAction(a.ctx, "backup", "device", deviceID,
 			fmt.Sprintf(`{"ip":"%s","config_type":"%s","result":"%s"}`, deviceIP, configType, status),
 			status, time.Since(start).Milliseconds())
@@ -1226,6 +1184,13 @@ func (a *App) ExportDiffHTML(req DiffRequest, nameA, nameB string) (string, erro
 	return path, nil
 }
 
+// GetAllBackups returns all backups across all devices (for comparison feature)
+func (a *App) GetAllBackups() ([]models.Backup, error) {
+	var backups []models.Backup
+	err := db.DB.Order("created_at DESC").Limit(200).Find(&backups).Error
+	return backups, err
+}
+
 func (a *App) CompareBackups(backupIDA, backupIDB string) (*diff.DiffResult, error) {
 	textA, err := a.backupMgr.GetContent(backupIDA)
 	if err != nil {
@@ -1343,20 +1308,25 @@ func (a *App) GetAuditRules() ([]models.AuditRule, error) {
 }
 
 func (a *App) SaveAuditRule(rule models.AuditRule) (*models.AuditRule, error) {
-	if strings.TrimSpace(rule.Name) == "" {
-		return nil, fmt.Errorf("le nom de la règle est requis")
-	}
-	if strings.TrimSpace(rule.Pattern) == "" {
-		return nil, fmt.Errorf("le pattern de la règle est requis")
-	}
-	if _, err := regexp.Compile(strings.TrimSpace(strings.Split(rule.Pattern, " AND ")[0])); err != nil && !strings.Contains(rule.Pattern, " AND ") {
-		return nil, fmt.Errorf("pattern invalide: %w", err)
-	}
-	if err := validateAuditPattern(rule.Pattern); err != nil {
-		return nil, err
-	}
 	if rule.ID == "" {
 		rule.ID = uuid.NewString()
+	}
+	// Validate regex pattern
+	testPattern := rule.Pattern
+	if strings.Contains(testPattern, " AND ") {
+		for _, part := range strings.Split(testPattern, " AND ") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if _, err := regexp.Compile("(?im)" + part); err != nil {
+				return nil, fmt.Errorf("pattern regex invalide '%s': %w", part, err)
+			}
+		}
+	} else {
+		if _, err := regexp.Compile("(?im)" + testPattern); err != nil {
+			return nil, fmt.Errorf("pattern regex invalide: %w", err)
+		}
 	}
 	err := db.DB.Save(&rule).Error
 	return &rule, err
@@ -1511,24 +1481,8 @@ func (a *App) GetScheduledJobs() ([]models.ScheduledJob, error) {
 }
 
 func (a *App) SaveScheduledJob(job models.ScheduledJob) (*models.ScheduledJob, error) {
-	if strings.TrimSpace(job.Name) == "" {
-		return nil, fmt.Errorf("le nom de la tâche est requis")
-	}
 	if job.ID == "" {
 		job.ID = uuid.NewString()
-	}
-	payloadMap := map[string]interface{}{}
-	if strings.TrimSpace(job.Payload) != "" {
-		if err := json.Unmarshal([]byte(job.Payload), &payloadMap); err != nil {
-			return nil, fmt.Errorf("payload JSON invalide: %w", err)
-		}
-	}
-	if payloadMap["once"] == true {
-		if payloadMap["once_at"] == nil {
-			payloadMap["once_at"] = time.Now().UTC().Format(time.RFC3339)
-		}
-		encoded, _ := json.Marshal(payloadMap)
-		job.Payload = string(encoded)
 	}
 	err := a.sched.AddJob(a.ctx, &job)
 	return &job, err
@@ -1550,7 +1504,10 @@ func (a *App) RunScheduledJobNow(id string) error {
 	}
 	var payload map[string]interface{}
 	if job.Payload != "" {
-		json.Unmarshal([]byte(job.Payload), &payload)
+		if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
+			logger.Error(fmt.Sprintf("invalid payload for job %s", id), err)
+			return fmt.Errorf("invalid job payload: %w", err)
+		}
 	}
 	return a.runScheduledJob(a.ctx, job.JobType, payload)
 }
@@ -1598,24 +1555,16 @@ func (a *App) GetLogFiles() []string {
 
 // GetLogFileContent reads the content of a log file (security: only log files allowed)
 func (a *App) GetLogFileContent(filename string) (string, error) {
-	clean, err := validateLogFilename(filename)
-	if err != nil {
-		return "", err
+	// Security: reject path traversal attempts
+	clean := filepath.Base(filename)
+	if clean != filename || strings.Contains(filename, "..") {
+		return "", fmt.Errorf("nom de fichier invalide")
+	}
+	if !strings.HasSuffix(clean, ".log") {
+		return "", fmt.Errorf("seuls les fichiers .log sont accessibles")
 	}
 	logDir := filepath.Join(a.dataDir, "logs")
-	resolved := filepath.Join(logDir, clean)
-	absLogDir, err := filepath.Abs(logDir)
-	if err != nil {
-		return "", err
-	}
-	absResolved, err := filepath.Abs(resolved)
-	if err != nil {
-		return "", err
-	}
-	if absResolved != absLogDir && !strings.HasPrefix(absResolved, absLogDir+string(os.PathSeparator)) {
-		return "", fmt.Errorf("chemin de journal invalide")
-	}
-	content, err := os.ReadFile(absResolved)
+	content, err := os.ReadFile(filepath.Join(logDir, clean))
 	if err != nil {
 		return "", fmt.Errorf("lecture du journal: %w", err)
 	}
@@ -1654,7 +1603,9 @@ func (a *App) GetSettings() (*AppSettings, error) {
 		}, nil
 	}
 	var settings AppSettings
-	json.Unmarshal(data, &settings)
+	if err := json.Unmarshal(data, &settings); err != nil {
+		logger.Error("failed to parse settings.json", err)
+	}
 	if settings.BackupDir == "" {
 		settings.BackupDir = defaultBackupDir
 	}
@@ -1670,7 +1621,10 @@ func (a *App) SaveSettings(settings AppSettings) error {
 	if err := os.WriteFile(settingsPath, data, 0600); err != nil {
 		return err
 	}
-	a.applySettings(settings)
+	// Apply backup dir change to the running manager
+	if settings.BackupDir != "" && a.backupMgr != nil {
+		a.backupMgr.SetBackupDir(settings.BackupDir)
+	}
 	return nil
 }
 
@@ -1734,116 +1688,6 @@ func (a *App) runScheduledJob(ctx context.Context, jobType string, payload map[s
 	}
 	logger.AuditAction(a.ctx, "scheduled_job_end", "scheduler", jobType, details, status, time.Since(start).Milliseconds())
 	return err
-}
-
-func (a *App) applySettings(settings AppSettings) {
-	if settings.BackupDir != "" && a.backupMgr != nil {
-		a.backupMgr.SetBackupDir(settings.BackupDir)
-	}
-	if settings.LogRetentionDays > 0 {
-		if err := logger.CleanupOldLogs(filepath.Join(a.dataDir, "logs"), settings.LogRetentionDays); err != nil {
-			logger.Error("log retention cleanup failed", err)
-		}
-	}
-}
-
-func (a *App) startLogRetentionWorker(ctx context.Context) {
-	ticker := time.NewTicker(12 * time.Hour)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			settings, err := a.GetSettings()
-			if err != nil {
-				logger.Error("load settings for log retention failed", err)
-				continue
-			}
-			a.applySettings(*settings)
-		}
-	}
-}
-
-func normalizeSNMPVersion(version string) string {
-	switch strings.ToLower(strings.TrimSpace(version)) {
-	case "v3":
-		return "v3"
-	case "v1":
-		return "v1"
-	default:
-		return "v2c"
-	}
-}
-
-func normalizeManualIPs(ips []string) ([]string, error) {
-	if len(ips) == 0 {
-		return nil, nil
-	}
-	seen := map[string]struct{}{}
-	result := make([]string, 0, len(ips))
-	for _, raw := range ips {
-		candidate := strings.TrimSpace(raw)
-		if candidate == "" {
-			continue
-		}
-		parsed := net.ParseIP(candidate)
-		if parsed == nil {
-			return nil, fmt.Errorf("IP invalide: %s", candidate)
-		}
-		normalized := candidate
-		if parsed.To4() != nil {
-			normalized = parsed.String()
-		}
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		result = append(result, normalized)
-	}
-	sort.Strings(result)
-	return result, nil
-}
-
-func validateCIDR(cidr string) error {
-	trimmed := strings.TrimSpace(cidr)
-	if trimmed == "" {
-		return fmt.Errorf("le CIDR est requis")
-	}
-	if strings.Contains(trimmed, "/") {
-		if _, _, err := net.ParseCIDR(trimmed); err != nil {
-			return fmt.Errorf("CIDR invalide: %w", err)
-		}
-		return nil
-	}
-	if net.ParseIP(trimmed) == nil {
-		return fmt.Errorf("IP ou CIDR invalide: %s", trimmed)
-	}
-	return nil
-}
-
-func validateAuditPattern(pattern string) error {
-	for _, part := range strings.Split(pattern, " AND ") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			return fmt.Errorf("pattern invalide: segment vide")
-		}
-		if _, err := regexp.Compile(part); err != nil {
-			return fmt.Errorf("pattern invalide (%s): %w", part, err)
-		}
-	}
-	return nil
-}
-
-func validateLogFilename(filename string) (string, error) {
-	clean := filepath.Base(strings.TrimSpace(filename))
-	if clean == "" || clean == "." || clean != strings.TrimSpace(filename) || strings.Contains(filename, "..") {
-		return "", fmt.Errorf("nom de fichier invalide")
-	}
-	if filepath.Ext(clean) != ".log" {
-		return "", fmt.Errorf("seuls les fichiers .log sont accessibles")
-	}
-	return clean, nil
 }
 
 func countStatus(backups []models.Backup, status string) int {

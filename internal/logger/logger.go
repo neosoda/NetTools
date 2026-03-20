@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"networktools/internal/db"
@@ -106,4 +107,29 @@ func AuditAction(ctx context.Context, action, entityType, entityID, details, sta
 		Str("status", status).
 		Int64("duration_ms", durationMs).
 		Msg("audit")
+}
+
+// CleanOldFiles removes log files older than the given number of days
+func CleanOldFiles(logDir string, retentionDays int) {
+	if retentionDays <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			os.Remove(filepath.Join(logDir, e.Name()))
+			Info(fmt.Sprintf("ancien fichier journal supprimé: %s", e.Name()))
+		}
+	}
 }

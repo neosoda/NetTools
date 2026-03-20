@@ -5,8 +5,7 @@ import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
-
-async function getBackend() { return import('../../wailsjs/go/main/App') }
+import { getBackend } from '../lib/backend'
 
 // ── Exemples de playbooks prêts à l'emploi ──────────────────────────────────
 const PLAYBOOK_TEMPLATES = [

@@ -8,8 +8,7 @@ import Input from '../components/Input'
 import Select from '../components/Select'
 import StatusBadge from '../components/StatusBadge'
 import { formatDate } from '../lib/utils'
-
-import backend from '../lib/backend'
+import { getBackend } from '../lib/backend'
 
 // Convert UI form to cron expression (second-precision: "SEC MIN HOUR DOM MON DOW")
 function buildCronExpression(freq: string, hour: string, minute: string, dayOfWeek: string, dayOfMonth: string, onceDate: string, onceTime: string): string {
@@ -29,9 +28,9 @@ function buildCronExpression(freq: string, hour: string, minute: string, dayOfWe
         void year // year not supported in cron, but the job will auto-disable after execution
         return `0 ${om} ${oh} ${day} ${mon} *`
       }
-      // Fallback: execute at next minute (essentially "now")
-      const now = new Date()
-      return `0 ${now.getMinutes() + 1} ${now.getHours()} ${now.getDate()} ${now.getMonth() + 1} *`
+      // Fallback: execute 2 minutes from now
+      const now = new Date(Date.now() + 2 * 60000)
+      return `0 ${now.getMinutes()} ${now.getHours()} ${now.getDate()} ${now.getMonth() + 1} *`
     }
     default: return '0 0 2 * * *'
   }
@@ -87,37 +86,37 @@ export default function SchedulerPage() {
 
   const { data: jobs = [] } = useQuery({
     queryKey: ['scheduled-jobs'],
-    queryFn: () => backend.GetScheduledJobs(),
+    queryFn: async () => { const m = await getBackend(); return m.GetScheduledJobs() },
   })
   const { data: devices = [] } = useQuery({
     queryKey: ['devices'],
-    queryFn: () => backend.GetDevices(),
+    queryFn: async () => { const m = await getBackend(); return m.GetDevices() },
   })
   const { data: playbooks = [] } = useQuery({
     queryKey: ['playbooks'],
-    queryFn: () => backend.GetPlaybooks(),
+    queryFn: async () => { const m = await getBackend(); return m.GetPlaybooks() },
   })
   const { data: credentials = [] } = useQuery({
     queryKey: ['credentials'],
-    queryFn: () => backend.GetCredentials(),
+    queryFn: async () => { const m = await getBackend(); return m.GetCredentials() },
   })
 
   const saveMutation = useMutation({
-    mutationFn: (job: any) => backend.SaveScheduledJob(job),
+    mutationFn: async (job: any) => { const m = await getBackend(); return m.SaveScheduledJob(job) },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['scheduled-jobs'] }); setShowModal(false) },
   })
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => backend.DeleteScheduledJob(id),
+    mutationFn: async (id: string) => { const m = await getBackend(); return m.DeleteScheduledJob(id) },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scheduled-jobs'] }),
   })
   const toggleMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      const m = backend; return m.ToggleScheduledJob(id, enabled)
+      const m = await getBackend(); return m.ToggleScheduledJob(id, enabled)
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scheduled-jobs'] }),
   })
   const runNowMutation = useMutation({
-    mutationFn: (id: string) => backend.RunScheduledJobNow(id),
+    mutationFn: async (id: string) => { const m = await getBackend(); return m.RunScheduledJobNow(id) },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scheduled-jobs'] }),
   })
 
@@ -136,7 +135,7 @@ export default function SchedulerPage() {
     const jobType = editJob?.job_type || 'backup'
     const payload: any = {}
 
-    if (freq === 'once') { payload.once = true; if (onceDate && onceTime) payload.once_at = new Date(`${onceDate}T${onceTime}:00`).toISOString() }
+    if (freq === 'once') payload.once = true
 
     switch (jobType) {
       case 'backup':

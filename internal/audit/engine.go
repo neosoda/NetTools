@@ -9,6 +9,7 @@ import (
 
 	"networktools/internal/db"
 	"networktools/internal/db/models"
+	"networktools/internal/logger"
 
 	"github.com/google/uuid"
 )
@@ -91,7 +92,9 @@ func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error
 			remediationLines = append(remediationLines, "!")
 		}
 
-		db.DB.Create(&result)
+		if err := db.DB.Create(&result).Error; err != nil {
+			logger.Error(fmt.Sprintf("failed to persist audit result for device %s rule %s", req.Device.ID, rule.ID), err)
+		}
 		report.Results = append(report.Results, result)
 
 		if passed {

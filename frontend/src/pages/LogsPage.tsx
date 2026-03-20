@@ -7,8 +7,7 @@ import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import Button from '../components/Button'
 import { formatDate } from '../lib/utils'
-
-import backend from '../lib/backend'
+import { getBackend } from '../lib/backend'
 
 function tryParseJson(s: string) {
   try { return JSON.parse(s) } catch { return null }
@@ -38,7 +37,7 @@ export default function LogsPage() {
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ['audit-logs', actionFilter],
     queryFn: async () => {
-      const m = backend
+      const m = await getBackend()
       return m.GetAuditLogs({ limit: 500, offset: 0, action: actionFilter })
     },
     refetchInterval: 10000,
@@ -46,14 +45,14 @@ export default function LogsPage() {
 
   const { data: logFiles = [] } = useQuery({
     queryKey: ['log-files'],
-    queryFn: () => backend.GetLogFiles(),
+    queryFn: async () => { const m = await getBackend(); return m.GetLogFiles() },
   })
 
   const handleLoadFile = async (filename: string) => {
     setSelectedFile(filename)
     setLoadingFile(true)
     try {
-      const m = backend
+      const m = await getBackend()
       const content = await m.GetLogFileContent(filename)
       setFileContent(content)
     } catch (e: any) {

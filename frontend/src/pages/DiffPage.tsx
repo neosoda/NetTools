@@ -2,8 +2,7 @@ import { useState, useRef, useCallback, DragEvent } from 'react'
 import { GitCompare, Upload, X, FileDown } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
-
-import backend from '../lib/backend'
+import { getBackend } from '../lib/backend'
 
 interface DiffLine {
   type: 'equal' | 'insert' | 'delete'
@@ -31,8 +30,30 @@ export default function DiffPage() {
   // Filter display
   const [showOnlyChanges, setShowOnlyChanges] = useState(false)
 
+  // Backup comparison mode
+  const [diffMode, setDiffMode] = useState<'text' | 'backup'>('text')
+  const [backups, setBackups] = useState<any[]>([])
+  const [devices, setDevices] = useState<any[]>([])
+  const [selectedBackupA, setSelectedBackupA] = useState('')
+  const [selectedBackupB, setSelectedBackupB] = useState('')
+  const [selectedDeviceId, setSelectedDeviceId] = useState('')
+
   const fileRefA = useRef<HTMLInputElement>(null)
   const fileRefB = useRef<HTMLInputElement>(null)
+
+  // Load devices for backup mode
+  const loadDevices = async () => {
+    const m = await getBackend()
+    const devs = await m.GetDevices()
+    setDevices(devs || [])
+  }
+
+  const loadBackups = async (deviceId: string) => {
+    if (!deviceId) { setBackups([]); return }
+    const m = await getBackend()
+    const bks = await m.GetBackups(deviceId)
+    setBackups(bks || [])
+  }
 
   const readFile = useCallback((file: File, setter: (v: string) => void, nameSetter: (v: string) => void) => {
     const reader = new FileReader()
@@ -71,7 +92,7 @@ export default function DiffPage() {
   const handleExportHTML = async () => {
     setExporting(true)
     try {
-      const m = backend
+      const m = await getBackend()
       const patterns = ignorePatterns.split('\n').map(s => s.trim()).filter(Boolean)
       await m.ExportDiffHTML(
         { text_a: textA, text_b: textB, ignore_patterns: patterns,
@@ -85,7 +106,7 @@ export default function DiffPage() {
   const handleCompare = async () => {
     setLoading(true)
     try {
-      const m = backend
+      const m = await getBackend()
       const patterns = ignorePatterns
         .split('\n')
         .map(s => s.trim())
@@ -108,6 +129,27 @@ export default function DiffPage() {
           summary: result.summary || '',
         })
       }
+    } finally { setLoading(false) }
+  }
+
+  const handleCompareBackups = async () => {
+    if (!selectedBackupA || !selectedBackupB) return
+    setLoading(true)
+    try {
+      const m = await getBackend()
+      const result = await m.CompareBackups(selectedBackupA, selectedBackupB)
+      if (result) {
+        setDiffs(result.diffs || [])
+        setStats({
+          added: result.added,
+          removed: result.removed,
+          unchanged: result.unchanged,
+          summary: result.summary || '',
+        })
+      }
+    } catch (e: any) {
+      setDiffs([])
+      setStats(null)
     } finally { setLoading(false) }
   }
 
@@ -142,6 +184,16 @@ export default function DiffPage() {
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Options bar */}
         <div className="flex flex-wrap items-center gap-3 md:gap-4 px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs">
+          <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5 mr-2">
+            <button onClick={() => setDiffMode('text')}
+              className={`px-2 py-0.5 rounded text-xs transition-colors ${diffMode === 'text' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
+              Texte
+            </button>
+            <button onClick={() => { setDiffMode('backup'); loadDevices() }}
+              className={`px-2 py-0.5 rounded text-xs transition-colors ${diffMode === 'backup' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
+              Backups
+            </button>
+          </div>
           <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer hover:text-slate-200 transition-colors">
             <input type="checkbox" className="w-3 h-3 accent-blue-500" checked={ignoreCase}
               onChange={e => setIgnoreCase(e.target.checked)} />
@@ -178,7 +230,32 @@ export default function DiffPage() {
           </div>
         </div>
 
-        {/* Input areas with drag & drop */}
+        {/* Input areas */}
+        {diffMode === 'backup' ? (
+          <div className="border-b border-slate-800 p-4 space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <select value={selectedDeviceId} onChange={e => { setSelectedDeviceId(e.target.value); loadBackups(e.target.value) }}
+                className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                <option value="">Sélectionner un équipement...</option>
+                {devices.map((d: any) => <option key={d.id} value={d.id}>{d.hostname || d.ip} ({d.ip})</option>)}
+              </select>
+              <select value={selectedBackupA} onChange={e => setSelectedBackupA(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                <option value="">Backup A...</option>
+                {backups.map((b: any) => <option key={b.id} value={b.id}>{new Date(b.created_at).toLocaleString()} ({b.config_type})</option>)}
+              </select>
+              <select value={selectedBackupB} onChange={e => setSelectedBackupB(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                <option value="">Backup B...</option>
+                {backups.map((b: any) => <option key={b.id} value={b.id}>{new Date(b.created_at).toLocaleString()} ({b.config_type})</option>)}
+              </select>
+            </div>
+            <Button variant="primary" loading={loading} onClick={handleCompareBackups}
+              disabled={!selectedBackupA || !selectedBackupB || selectedBackupA === selectedBackupB}>
+              <GitCompare className="w-4 h-4" /> Comparer les backups
+            </Button>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-b border-slate-800 min-h-[12rem] md:h-48">
           <div className="flex flex-col border-b md:border-b-0 md:border-r border-slate-800"
             onDrop={handleDrop('a')} onDragOver={handleDragOver}>

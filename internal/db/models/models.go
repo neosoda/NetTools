@@ -69,7 +69,7 @@ type Backup struct {
 	DurationMs   int64     `json:"duration_ms"`
 	ErrorMessage string    `json:"error_message"`
 	Content      string    `json:"content,omitempty" gorm:"-"` // transient
-	CreatedAt    time.Time `json:"created_at"`
+	CreatedAt    time.Time `json:"created_at" gorm:"index"`
 }
 
 type ScheduledJob struct {
@@ -94,7 +94,7 @@ type AuditLog struct {
 	Details    string    `json:"details"` // JSON
 	Status     string    `json:"status"` // success|failure
 	DurationMs int64     `json:"duration_ms"`
-	CreatedAt  time.Time `json:"created_at"`
+	CreatedAt  time.Time `json:"created_at" gorm:"index"`
 }
 
 type SchemaMigration struct {
