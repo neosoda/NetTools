@@ -33,7 +33,9 @@ type Manager struct {
 }
 
 func New(backupDir string) *Manager {
-	os.MkdirAll(backupDir, 0700)
+	if err := os.MkdirAll(backupDir, 0700); err != nil {
+		fmt.Fprintf(os.Stderr, "backup: WARNING: could not create backup directory %q: %v\n", backupDir, err)
+	}
 	return &Manager{backupDir: backupDir}
 }
 
@@ -74,25 +76,12 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 		Status:     "failed",
 	}
 
-	// Determine command based on vendor
-	vcfg := map[string]map[string]string{
-		"cisco":   {"running": "show running-config", "startup": "show startup-config"},
-		"aruba":   {"running": "show running-config", "startup": "show startup-config"},
-		"hp":      {"running": "show running-config", "startup": "show startup-config"},
-		"hpe":     {"running": "display current-configuration", "startup": "display saved-configuration"},
-		"allied":  {"running": "show running-config", "startup": "show startup-config"},
-		"unknown": {"running": "show running-config", "startup": "show startup-config"},
-	}
 	vendor := strings.ToLower(req.Device.Vendor)
 	if vendor == "" {
 		vendor = "unknown"
 	}
-	command := "show running-config"
-	if cmds, ok := vcfg[vendor]; ok {
-		if cmd, ok := cmds[req.ConfigType]; ok {
-			command = cmd
-		}
-	}
+	// Delegate command lookup to the ssh package (single source of truth).
+	command := ssh.GetBackupCommand(vendor, req.ConfigType)
 
 	params := ssh.ConnectParams{
 		Host:       req.Device.IP,
@@ -113,19 +102,43 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 	}
 	defer sess.Close()
 
-	output, err := sess.RunCommandInteractive(ctx, command)
-	if err != nil {
-		backup.ErrorMessage = err.Error()
-		backup.DurationMs = time.Since(start).Milliseconds()
-		db.DB.Create(backup)
-		return backup, err
+	// Aruba AOS-S does NOT support SSH exec channel at all.
+	// Attempting exec first corrupts the SSH connection state, making the
+	// interactive fallback also fail. Go straight to interactive for Aruba.
+	// (Source: Netmiko, ntc-ansible, Aruba Ansible collections all confirm this.)
+	useInteractive := vendor == "aruba"
+
+	var output string
+
+	if !useInteractive {
+		// Strategy 1: direct exec (no PTY) — like Python's exec_command.
+		// Clean output, no pagination, no prompts. Works on most modern devices.
+		output, err = sess.RunCommand(ctx, command)
+		// Some devices return exec rejection as stdout text with exit code 0.
+		if err == nil && isExecRejectedOutput(output) {
+			useInteractive = true
+		} else if err != nil || len(strings.TrimSpace(output)) < 10 {
+			useInteractive = true
+		}
+	}
+
+	if useInteractive {
+		// Strategy 2: interactive shell with PTY — handles pagination, banners, prompts.
+		output, err = sess.RunCommandInteractive(ctx, command)
+		if err != nil {
+			backup.ErrorMessage = err.Error()
+			backup.DurationMs = time.Since(start).Milliseconds()
+			db.DB.Create(backup)
+			return backup, err
+		}
 	}
 
 	// Deep-clean the output: remove any remaining ANSI/control artifacts
 	output = deepCleanConfig(output)
 
-	// Extract only the configuration content (strip command echo, prompts, preamble)
-	output = extractConfigContent(output, command)
+	// Extract only the configuration content (strip command echo, prompts, preamble).
+	// fromExec=true skips the command-echo search (exec output has no echo/preamble).
+	output = extractConfigContent(output, command, !useInteractive)
 
 	// Validate output is not empty or too short
 	if len(strings.TrimSpace(output)) < 10 {
@@ -247,28 +260,50 @@ func (m *Manager) buildFilename(device models.Device, configType string) string 
 	return filename
 }
 
-// extractConfigContent strips SSH session artifacts (command echo, prompts, preamble)
-// and returns only the actual configuration output
-func extractConfigContent(output, command string) string {
+// configStartRe matches known start markers of device configuration output
+// Used as fallback when the command echo is not found in the output.
+var configStartRe = regexp.MustCompile(`(?i)^(Building configuration|Current configuration|Running configuration|#\s*version|version\s+\d|hostname\s+\S|sysname \S)`)
+
+// extractConfigContent strips SSH session artifacts and returns only the configuration.
+//
+// fromExec must be true when the output comes from the SSH exec channel (no PTY).
+// In that case the output is already clean: no command echo, no interactive preamble.
+// Only trailing prompt lines need to be removed.
+//
+// When fromExec is false (interactive shell path), the function first locates the
+// echoed command line and strips everything before it, then falls back to a known
+// config-start marker when ECHO is disabled on the device.
+func extractConfigContent(output, command string, fromExec bool) string {
 	lines := strings.Split(output, "\n")
 
-	// Find the line containing the echoed command (e.g., "show running-config")
-	cmdIdx := -1
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, command) {
-			cmdIdx = i
-			break
+	if !fromExec {
+		// Interactive path: locate the echoed command (e.g. "show running-config")
+		// and discard everything up to and including that line.
+		cmdIdx := -1
+		for i, line := range lines {
+			if strings.Contains(strings.TrimSpace(line), command) {
+				cmdIdx = i
+				break
+			}
+		}
+
+		if cmdIdx >= 0 && cmdIdx+1 < len(lines) {
+			lines = lines[cmdIdx+1:]
+		} else {
+			// No echo found (ECHO disabled, or exec fallback without echo).
+			// Scan for a known config start marker to skip the preamble.
+			for i, line := range lines {
+				if configStartRe.MatchString(strings.TrimSpace(line)) {
+					lines = lines[i:]
+					break
+				}
+			}
 		}
 	}
+	// Exec path: output is already clean — skip directly to trailing cleanup.
 
-	// Take everything after the command echo line
-	if cmdIdx >= 0 && cmdIdx+1 < len(lines) {
-		lines = lines[cmdIdx+1:]
-	}
-
-	// Remove trailing prompt lines (lines ending with # or > typically indicating a device prompt)
-	promptRe := regexp.MustCompile(`^\S.*[#>]\s*$`)
+	// Remove trailing device prompt lines (e.g. "Switch#", "<SwitchA>") and blanks.
+	promptRe := regexp.MustCompile(`^[\w\-.<>\[\]]+[#>%]\s*$`)
 	for len(lines) > 0 {
 		last := strings.TrimSpace(lines[len(lines)-1])
 		if last == "" || promptRe.MatchString(last) {
@@ -286,15 +321,26 @@ func deepCleanConfig(raw string) string {
 	// Use the SSH package's comprehensive ANSI cleaner first
 	cleaned := ssh.CleanOutput(raw)
 
-	// Remove pagination artifacts that might remain
+	// Patterns to strip: pagination artifacts, CLI error lines (%, ^), terminal responses
 	paginationRe := regexp.MustCompile(`(?i)^\s*--\s*More\s*--\s*$`)
+	// Cisco/HP/Allied CLI error/info lines: "% Invalid input", "% Ambiguous", etc.
+	cliErrorRe := regexp.MustCompile(`^\s*%\s+`)
+	// Caret pointer lines produced by CLI errors (e.g. "          ^")
+	caretLineRe := regexp.MustCompile(`^\s*\^\s*$`)
+
 	lines := strings.Split(cleaned, "\n")
 	var result []string
 	for _, line := range lines {
-		if paginationRe.MatchString(line) {
+		switch {
+		case paginationRe.MatchString(line):
 			continue
+		case cliErrorRe.MatchString(line):
+			continue
+		case caretLineRe.MatchString(line):
+			continue
+		default:
+			result = append(result, line)
 		}
-		result = append(result, line)
 	}
 
 	return strings.TrimSpace(strings.Join(result, "\n"))
@@ -428,6 +474,26 @@ func (m *Manager) GetContent(backupID string) (string, error) {
 		return "", err
 	}
 	return string(content), nil
+}
+
+// isExecRejectedOutput returns true when a device returns an SSH exec rejection
+// as stdout text with exit code 0 instead of a proper SSH error (e.g. Aruba AOS-S/AOS-CX).
+// Only the first 10 lines are inspected to avoid false positives in valid config output.
+func isExecRejectedOutput(s string) bool {
+	lines := strings.SplitN(strings.TrimSpace(s), "\n", 11)
+	if len(lines) > 10 {
+		lines = lines[:10]
+	}
+	for _, line := range lines {
+		lower := strings.ToLower(strings.TrimSpace(line))
+		if strings.Contains(lower, "command execution is not supported") ||
+			strings.Contains(lower, "subsystem not found") ||
+			strings.Contains(lower, "command not supported") ||
+			strings.HasPrefix(lower, "% invalid") {
+			return true
+		}
+	}
+	return false
 }
 
 // ListForDevice returns all backups for a device

@@ -27,6 +27,10 @@ export default function BackupPage() {
   const [configType, setConfigType] = useState('running')
   const [backupProgress, setBackupProgress] = useState<Record<string, any>>({})
 
+  // Inline credentials (fallback when no global credential is selected)
+  const [inlineUsername, setInlineUsername] = useState('')
+  const [inlinePassword, setInlinePassword] = useState('')
+
   // Historique
   const [selectedDevice, setSelectedDevice] = useState('')
   const [viewBackup, setViewBackup] = useState<string | null>(null)
@@ -106,8 +110,8 @@ export default function BackupPage() {
           ip_list: ipList,
           config_type: configType,
           credential_id: globalCredId,
-          username: '',
-          password: '',
+          username: globalCredId ? '' : inlineUsername,
+          password: globalCredId ? '' : inlinePassword,
         })
       }
       return m.RunBackup({
@@ -115,11 +119,15 @@ export default function BackupPage() {
         ip_list: [],
         config_type: configType,
         credential_id: globalCredId,
-        username: '',
-        password: '',
+        username: globalCredId ? '' : inlineUsername,
+        password: globalCredId ? '' : inlinePassword,
       })
     },
-    onSuccess: () => refetchBackups(),
+    onSuccess: () => {
+      refetchBackups()
+      setInlineUsername('')
+      setInlinePassword('')
+    },
   })
 
   const handleViewBackup = async (id: string) => {
@@ -142,7 +150,7 @@ export default function BackupPage() {
     setTerminalLines([])
     try {
       const m = await getBackend()
-      await m.RunTerminalCommand(terminalDevice, terminalCommand.trim())
+      await m.RunTerminalCommand(terminalDevice, terminalCommand.trim(), globalCredId)
     } catch (e: any) {
       setTerminalLines(prev => [...prev, { text: `ERREUR: ${e?.message || e}`, error: true }])
     } finally {
@@ -160,7 +168,8 @@ export default function BackupPage() {
 
   const terminalDeviceLabel = (knownDevices as any[]).find((d: any) => d.id === terminalDevice)
 
-  const canLaunch = !!globalCredId && (
+  const hasCredential = !!globalCredId || (inlineUsername.trim().length > 0 && inlinePassword.trim().length > 0)
+  const canLaunch = hasCredential && (
     deviceSource === 'manual'
       ? manualIpText.trim().length > 0
       : selectedDevices.length > 0
@@ -185,19 +194,21 @@ export default function BackupPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Select label="Type de config" value={configType} options={configTypeOptions}
               onChange={e => setConfigType(e.target.value)} />
             <div className="flex-1" />
-            {!globalCredId && (
-              <p className="text-xs text-amber-400 self-end pb-1">
-                Sélectionnez un credential dans le menu de gauche pour activer le backup.
-              </p>
-            )}
-            {globalCredId && (
-              <p className="text-xs text-green-400 self-end pb-1">
-                Credential actif depuis le menu de gauche
-              </p>
+            {globalCredId ? (
+              <p className="text-xs text-green-400 self-end pb-1">Credential actif depuis le menu de gauche</p>
+            ) : (
+              <>
+                <Input label="Utilisateur SSH" value={inlineUsername}
+                  onChange={e => setInlineUsername(e.target.value)}
+                  placeholder="admin" className="w-36" />
+                <Input label="Mot de passe SSH" type="password" value={inlinePassword}
+                  onChange={e => setInlinePassword(e.target.value)}
+                  placeholder="••••••" className="w-36" />
+              </>
             )}
           </div>
 

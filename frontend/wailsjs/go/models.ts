@@ -232,6 +232,7 @@ export namespace main {
 	export class PlaybookRunRequest {
 	    playbook_id: string;
 	    device_ids: string[];
+	    credential_id: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PlaybookRunRequest(source);
@@ -241,6 +242,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.playbook_id = source["playbook_id"];
 	        this.device_ids = source["device_ids"];
+	        this.credential_id = source["credential_id"];
 	    }
 	}
 	export class SNMPTestResult {

@@ -46,6 +46,10 @@ export function ExportScanToExcel(arg1) {
   return window['go']['main']['App']['ExportScanToExcel'](arg1);
 }
 
+export function GetAllBackups() {
+  return window['go']['main']['App']['GetAllBackups']();
+}
+
 export function GetAuditLogs(arg1) {
   return window['go']['main']['App']['GetAuditLogs'](arg1);
 }
@@ -130,8 +134,8 @@ export function RunScheduledJobNow(arg1) {
   return window['go']['main']['App']['RunScheduledJobNow'](arg1);
 }
 
-export function RunTerminalCommand(arg1, arg2) {
-  return window['go']['main']['App']['RunTerminalCommand'](arg1, arg2);
+export function RunTerminalCommand(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunTerminalCommand'](arg1, arg2, arg3);
 }
 
 export function SaveAuditRule(arg1) {

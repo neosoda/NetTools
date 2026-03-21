@@ -158,7 +158,9 @@ func (s *Scheduler) ToggleJob(ctx context.Context, jobID string, enabled bool) e
 		return err
 	}
 	job.Enabled = enabled
-	db.DB.Save(&job)
+	if err := db.DB.Save(&job).Error; err != nil {
+		return err
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

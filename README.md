@@ -23,6 +23,23 @@ Application desktop de gestion réseau pour administrateurs, construite avec **W
 - Historique : date, taille, hash SHA256, durée
 - Visualisation et export ZIP des backups
 
+#### Support multi-vendor SSH
+
+Stratégie **exec-first / interactive-fallback** : le moteur tente d'abord le canal SSH exec (sans PTY, sortie propre sans pagination), puis bascule automatiquement vers un shell interactif PTY si le device le rejette.
+
+| Vendor | Commande | Disable paging | Notes |
+|--------|----------|----------------|-------|
+| Cisco IOS/XE | `show running-config` | `terminal length 0` | Exec préféré |
+| Aruba AOS-S | `show running-config` | `no page` | Exec non supporté → interactive |
+| HP ProCurve | `show running-config` | `no page` | |
+| HPE Comware / H3C | `display current-configuration` | `screen-length 0 temporary` | |
+| Huawei VRP | `display current-configuration` | `screen-length 0 temporary` | |
+| Allied Telesis | `show running-config` | `terminal length 0` | AlliedWare Plus |
+| Fortinet FortiOS | `show full-configuration` | — | Pas de pagination |
+| Unknown | `show running-config` | — | Détection auto depuis banner SSH/MOTD |
+
+**Détection automatique du vendor** : si un équipement est marqué "unknown", le moteur détecte le vendor depuis la version SSH du serveur (`SSH-2.0-Cisco-...`, `SSH-2.0-HuaweiSSH`...) puis depuis le MOTD initial de la session.
+
 ### Audit de conformité
 - Règles regex configurables (présence / absence)
 - Sévérités : critique, élevé, moyen, faible

@@ -30,6 +30,8 @@ export function ExportDiffHTML(arg1:main.DiffRequest,arg2:string,arg3:string):Pr
 
 export function ExportScanToExcel(arg1:Array<string>):Promise<string>;
 
+export function GetAllBackups():Promise<Array<models.Backup>>;
+
 export function GetAuditLogs(arg1:main.AuditLogQuery):Promise<Array<models.AuditLog>>;
 
 export function GetAuditRules():Promise<Array<models.AuditRule>>;
@@ -72,7 +74,7 @@ export function RunSSHCommands(arg1:main.SSHCommandRequest):Promise<Array<ssh.Re
 
 export function RunScheduledJobNow(arg1:string):Promise<void>;
 
-export function RunTerminalCommand(arg1:string,arg2:string):Promise<string>;
+export function RunTerminalCommand(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function SaveAuditRule(arg1:models.AuditRule):Promise<models.AuditRule>;
 

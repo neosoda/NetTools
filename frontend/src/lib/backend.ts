@@ -1,5 +1,7 @@
 // Singleton backend module - avoids repeated dynamic imports
-let _backend: typeof import('../../wailsjs/go/main/App') | null = null
+import * as App from '../../wailsjs/go/main/App'
+
+let _backend: typeof App | null = null
 
 export async function getBackend() {
   if (!_backend) {
@@ -7,3 +9,6 @@ export async function getBackend() {
   }
   return _backend
 }
+
+// Default export for synchronous access (Wails functions are always available at runtime)
+export default App

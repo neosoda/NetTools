@@ -9,6 +9,7 @@ import Select from '../components/Select'
 import StatusBadge from '../components/StatusBadge'
 import { formatDate } from '../lib/utils'
 import { getBackend } from '../lib/backend'
+import { useGlobalCredential } from '../context/CredentialContext'
 
 // Convert UI form to cron expression (second-precision: "SEC MIN HOUR DOM MON DOW")
 function buildCronExpression(freq: string, hour: string, minute: string, dayOfWeek: string, dayOfMonth: string, onceDate: string, onceTime: string): string {
@@ -59,6 +60,7 @@ function describeFreq(freq: string, hour: string, minute: string, dow: string, d
 
 export default function SchedulerPage() {
   const qc = useQueryClient()
+  const { globalCredId } = useGlobalCredential()
   const [showModal, setShowModal] = useState(false)
   const [editJob, setEditJob] = useState<any>(null)
   const [advancedCron, setAdvancedCron] = useState(false)
@@ -83,6 +85,7 @@ export default function SchedulerPage() {
   const [simplePlaybookId, setSimplePlaybookId] = useState('')
   const [simpleCommands, setSimpleCommands] = useState('')
   const [simpleCredentialId, setSimpleCredentialId] = useState('')
+
 
   const { data: jobs = [] } = useQuery({
     queryKey: ['scheduled-jobs'],
@@ -125,7 +128,7 @@ export default function SchedulerPage() {
     setCustomCron('0 0 2 * * *'); setAdvancedCron(false)
     setOnceDate(''); setOnceTime('08:00')
     setPayloadMode('simple'); setSelectedDevices([]); setSimpleConfigType('running')
-    setSimpleCidr(''); setSimplePlaybookId(''); setSimpleCommands(''); setSimpleCredentialId('')
+    setSimpleCidr(''); setSimplePlaybookId(''); setSimpleCommands(''); setSimpleCredentialId(globalCredId)
     setEditJob({ enabled: true, job_type: 'backup', payload: '' })
     setShowModal(true)
   }

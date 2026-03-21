@@ -6,6 +6,7 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import { getBackend } from '../lib/backend'
+import { useGlobalCredential } from '../context/CredentialContext'
 
 // ── Exemples de playbooks prêts à l'emploi ──────────────────────────────────
 const PLAYBOOK_TEMPLATES = [
@@ -171,6 +172,7 @@ function yamlToCommands(yamlContent: string): string {
 
 export default function PlaybookPage() {
   const qc = useQueryClient()
+  const { globalCredId } = useGlobalCredential()
   const [showModal, setShowModal] = useState(false)
   const [editPb, setEditPb] = useState<any>(null)
   const [runModal, setRunModal] = useState<any>(null)
@@ -212,7 +214,7 @@ export default function PlaybookPage() {
   const runMutation = useMutation({
     mutationFn: async () => {
       const m = await getBackend()
-      return m.RunPlaybook({ playbook_id: runModal.id, device_ids: selectedDevices })
+      return m.RunPlaybook({ playbook_id: runModal.id, device_ids: selectedDevices, credential_id: globalCredId })
     },
     onSuccess: (data: any) => setResults(data || []),
   })

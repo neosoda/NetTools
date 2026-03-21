@@ -5,10 +5,35 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 )
+
+// safeBuffer is a thread-safe buffer for concurrent SSH reads and goroutine reads
+type safeBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *safeBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *safeBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (b *safeBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Len()
+}
 
 // VendorConfig defines vendor-specific SSH parameters
 type VendorConfig struct {
@@ -32,34 +57,49 @@ var vendorConfigs = map[string]VendorConfig{
 		DisablePaging:     "terminal length 0",
 	},
 	"aruba": {
+		// Aruba AOS-S (ProCurve heritage) — SSH exec channel not supported, must use interactive shell.
 		PaginationPattern: regexp.MustCompile(`(?i)--\s*MORE\s*--|Press any key to continue`),
 		PaginationSend:    " ",
 		PromptPattern:     regexp.MustCompile(`[#>]\s*$`),
-		BannerPattern:     regexp.MustCompile(`(?i)press any key|continue|Press any key to continue`),
+		BannerPattern:     regexp.MustCompile(`(?i)press\s+any\s+key`),
 		BannerSend:        "\r",
 		BackupCommand:     map[string]string{"running": "show running-config", "startup": "show startup-config"},
 		DisablePaging:     "no page",
 	},
 	"hp": {
+		// HP ProCurve / ArubaOS-Switch (J-series) — same CLI family as Aruba AOS-S.
 		PaginationPattern: regexp.MustCompile(`(?i)--\s*MORE\s*--|Press any key to continue`),
 		PaginationSend:    " ",
 		PromptPattern:     regexp.MustCompile(`[#>]\s*$`),
-		BannerPattern:     regexp.MustCompile(`(?i)press any key|continue`),
+		BannerPattern:     regexp.MustCompile(`(?i)press\s+any\s+key`),
 		BannerSend:        "\r",
 		BackupCommand:     map[string]string{"running": "show running-config", "startup": "show startup-config"},
 		DisablePaging:     "no page",
 	},
 	"hpe": {
-		PaginationPattern: regexp.MustCompile(`(?i)--\s*MORE\s*--|Press any key to continue`),
+		// HPE Comware / H3C — uses 'display' commands; 'screen-length 0 temporary' disables paging for the session.
+		PaginationPattern: regexp.MustCompile(`(?i)--\s*MORE\s*--`),
 		PaginationSend:    " ",
-		PromptPattern:     regexp.MustCompile(`[#>%]\s*$`),
-		BannerPattern:     regexp.MustCompile(`(?i)press any key|continue`),
+		PromptPattern:     regexp.MustCompile(`[#>]\s*$`),
+		BannerPattern:     regexp.MustCompile(`(?i)press\s+any\s+key`),
 		BannerSend:        "\r",
 		BackupCommand:     map[string]string{"running": "display current-configuration", "startup": "display saved-configuration"},
-		DisablePaging:     "screen-length disable",
+		DisablePaging:     "screen-length 0 temporary",
+	},
+	"huawei": {
+		// Huawei VRP (CloudEngine, Quidway, S-series, AR-series).
+		// Shares CLI heritage with HPE Comware (H3C) — same commands apply.
+		PaginationPattern: regexp.MustCompile(`(?i)--\s*More\s*--`),
+		PaginationSend:    " ",
+		PromptPattern:     regexp.MustCompile(`[#>]\s*$`),
+		BannerPattern:     regexp.MustCompile(`(?i)press\s+any\s+key`),
+		BannerSend:        "\r",
+		BackupCommand:     map[string]string{"running": "display current-configuration", "startup": "display saved-configuration"},
+		DisablePaging:     "screen-length 0 temporary",
 	},
 	"allied": {
-		PaginationPattern: regexp.MustCompile(`(?i)<cr>|--More--|Press any key`),
+		// Allied Telesis AlliedWare Plus.
+		PaginationPattern: regexp.MustCompile(`(?i)--\s*[Mm]ore\s*--`),
 		PaginationSend:    "\r",
 		PromptPattern:     regexp.MustCompile(`[#>]\s*$`),
 		BannerPattern:     regexp.MustCompile(`(?i)press any key|Press ENTER`),
@@ -67,15 +107,61 @@ var vendorConfigs = map[string]VendorConfig{
 		BackupCommand:     map[string]string{"running": "show running-config", "startup": "show startup-config"},
 		DisablePaging:     "terminal length 0",
 	},
-	"unknown": {
-		PaginationPattern: regexp.MustCompile(`(?i)--\s*More\s*--|--\s*MORE\s*--|Press any key|<cr>`),
-		PaginationSend:    " ",
-		PromptPattern:     regexp.MustCompile(`[#>$%]\s*$`),
-		BannerPattern:     regexp.MustCompile(`(?i)press any key|Press RETURN|continue`),
-		BannerSend:        "\r",
-		BackupCommand:     map[string]string{"running": "show running-config", "startup": "show startup-config"},
+	"fortinet": {
+		// Fortinet FortiOS (FortiGate, FortiSwitch) — SSH exec channel works well; no pagination.
+		PaginationPattern: nil,
+		PaginationSend:    "",
+		PromptPattern:     regexp.MustCompile(`[#$]\s*$`),
+		BannerPattern:     nil,
+		BannerSend:        "",
+		BackupCommand:     map[string]string{"running": "show full-configuration", "startup": "show full-configuration"},
 		DisablePaging:     "",
 	},
+	"unknown": {
+		PaginationPattern: regexp.MustCompile(`(?i)--\s*More\s*--|--\s*MORE\s*--|Press any key`),
+		PaginationSend:    " ",
+		PromptPattern:     regexp.MustCompile(`[#>$%]\s*$`),
+		BannerPattern:     regexp.MustCompile(`(?i)press any key|press RETURN`),
+		BannerSend:        "\r",
+		BackupCommand:     map[string]string{"running": "show running-config", "startup": "show running-config"},
+		DisablePaging:     "",
+	},
+}
+
+// GetBackupCommand returns the vendor-specific command to retrieve device configuration.
+// Falls back to "show running-config" for unknown vendors or config types.
+func GetBackupCommand(vendor, configType string) string {
+	vc, ok := vendorConfigs[strings.ToLower(vendor)]
+	if !ok {
+		vc = vendorConfigs["unknown"]
+	}
+	if cmd, ok := vc.BackupCommand[configType]; ok {
+		return cmd
+	}
+	return "show running-config"
+}
+
+// DetectVendorFromBanner tries to identify the device vendor from an SSH server
+// version string or the initial shell banner/MOTD.
+// Returns "" when the vendor cannot be determined.
+func DetectVendorFromBanner(banner string) string {
+	lower := strings.ToLower(banner)
+	switch {
+	case strings.Contains(lower, "cisco"):
+		return "cisco"
+	case strings.Contains(lower, "aruba"):
+		return "aruba"
+	case strings.Contains(lower, "alliedware") || strings.Contains(lower, "allied telesis"):
+		return "allied"
+	case strings.Contains(lower, "comware") || strings.Contains(lower, "h3c"):
+		return "hpe"
+	case strings.Contains(lower, "huawei"):
+		return "huawei"
+	case strings.Contains(lower, "fortinet") || strings.Contains(lower, "fortigate") || strings.Contains(lower, "fortiswitch"):
+		return "fortinet"
+	default:
+		return ""
+	}
 }
 
 // Comprehensive ANSI/terminal control sequence cleaning pattern
@@ -185,6 +271,14 @@ func Connect(ctx context.Context, p ConnectParams) (*Session, error) {
 		}
 	}
 
+	// Auto-detect vendor from SSH server version banner when vendor is unspecified.
+	// Example server versions: "SSH-2.0-Cisco-1.25", "SSH-2.0-HuaweiSSH".
+	if p.Vendor == "" || p.Vendor == "unknown" {
+		if detected := DetectVendorFromBanner(string(client.ServerVersion())); detected != "" {
+			p.Vendor = detected
+		}
+	}
+
 	return &Session{client: client, vendor: p.Vendor, timeout: p.Timeout}, nil
 }
 
@@ -194,7 +288,9 @@ func (s *Session) Close() {
 	}
 }
 
-// RunCommand executes a command and returns cleaned output
+// RunCommand executes a single command via SSH exec channel (no PTY, no interactive shell).
+// This is the preferred method for backup: the device sends the full output without
+// pagination because there is no terminal attached — equivalent to paramiko exec_command().
 func (s *Session) RunCommand(ctx context.Context, command string) (string, error) {
 	sess, err := s.client.NewSession()
 	if err != nil {
@@ -202,17 +298,10 @@ func (s *Session) RunCommand(ctx context.Context, command string) (string, error
 	}
 	defer sess.Close()
 
-	// Set terminal modes for interactive shell
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          0,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
-	}
-	if err := sess.RequestPty("xterm", 200, 200, modes); err != nil {
-		// Continue without PTY for non-interactive commands
-	}
+	// No PTY requested: exec channel without a terminal.
+	// Most network devices (Cisco, Allied, HP, HPE, Aruba) will send the full
+	// output without any "--More--" pagination when there is no terminal.
 
-	// Run with context timeout
 	outputCh := make(chan struct {
 		data []byte
 		err  error
@@ -231,9 +320,9 @@ func (s *Session) RunCommand(ctx context.Context, command string) (string, error
 		return "", ctx.Err()
 	case result := <-outputCh:
 		if result.err != nil {
-			if len(result.data) == 0 {
-				return "", fmt.Errorf("command failed: %w", result.err)
-			}
+			// Always propagate the error so the caller can fallback to interactive mode.
+			// (Some devices like Aruba reject exec channel but include error text in data.)
+			return "", result.err
 		}
 		return CleanOutput(string(result.data)), nil
 	}
@@ -261,7 +350,7 @@ func (s *Session) RunCommandInteractive(ctx context.Context, command string) (st
 		return "", fmt.Errorf("stdin pipe: %w", err)
 	}
 
-	var sb strings.Builder
+	var sb safeBuffer
 	sess.Stdout = &sb
 	sess.Stderr = &sb
 
@@ -298,6 +387,17 @@ waitLoop:
 			if hasTerminalPrompt(vc.PromptPattern, current) {
 				waitReady.Stop()
 				break waitLoop
+			}
+		}
+	}
+
+	// Phase 1.5: if vendor was unknown, try to detect from the initial banner/MOTD output.
+	// This allows Phase 2 (disable paging) to use the correct vendor-specific command.
+	if s.vendor == "unknown" {
+		if detected := DetectVendorFromBanner(sb.String()); detected != "" {
+			s.vendor = detected
+			if newVC, ok := vendorConfigs[s.vendor]; ok {
+				vc = newVC
 			}
 		}
 	}
@@ -370,14 +470,10 @@ waitLoop:
 					continue
 				}
 
-				// Handle late banners (some devices show banners mid-stream)
-				if vc.BannerPattern != nil && vc.BannerPattern.MatchString(tail) &&
-					!hasTerminalPrompt(vc.PromptPattern, tail) {
-					fmt.Fprint(stdin, vc.BannerSend)
-					stableCount = 0
-					lastLen = currentLen
-					continue
-				}
+				// Note: banner detection is intentionally NOT done here (Phase 4).
+				// Banners are only dismissed in Phase 1 (initial connection).
+				// Checking BannerPattern during command output can cause false-positive
+				// matches on config lines that happen to contain banner-like words.
 
 				if currentLen == lastLen {
 					stableCount++

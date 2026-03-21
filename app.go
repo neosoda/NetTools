@@ -110,17 +110,23 @@ func (a *App) startup(ctx context.Context) {
 	logger.Info("NetworkTools démarré")
 }
 
-// cleanOldLogs removes audit log entries older than retention days
+// cleanOldLogs removes audit log DB entries and log files older than retention days
 func (a *App) cleanOldLogs() {
 	settings, err := a.GetSettings()
 	if err != nil || settings.LogRetentionDays <= 0 {
 		return
 	}
 	cutoff := time.Now().AddDate(0, 0, -settings.LogRetentionDays)
+	if db.DB == nil {
+		return
+	}
 	result := db.DB.Where("created_at < ?", cutoff).Delete(&models.AuditLog{})
 	if result.RowsAffected > 0 {
-		logger.Info(fmt.Sprintf("nettoyage: %d anciens logs supprimés (rétention %d jours)", result.RowsAffected, settings.LogRetentionDays))
+		logger.Info(fmt.Sprintf("nettoyage: %d anciens logs DB supprimés (rétention %d jours)", result.RowsAffected, settings.LogRetentionDays))
 	}
+	// Clean log files on disk
+	logDir := filepath.Join(a.dataDir, "logs")
+	logger.CleanOldFiles(logDir, settings.LogRetentionDays)
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -988,6 +994,10 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 		// Find device IP for the event
 		deviceIP = deviceIPMap[deviceID]
 
+		pct := 0
+		if total > 0 {
+			pct = done * 100 / total
+		}
 		runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
 			"device_id": deviceID,
 			"device_ip": deviceIP,
@@ -995,7 +1005,7 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 			"error":     errMsg,
 			"done":      done,
 			"total":     total,
-			"percent":   done * 100 / total,
+			"percent":   pct,
 		})
 	})
 
@@ -1058,7 +1068,7 @@ func (a *App) ExportBackupsZip(backupIDs []string) (string, error) {
 // ─────────────────────────────────────────────
 
 // RunTerminalCommand executes a command on a device via SSH and streams output
-func (a *App) RunTerminalCommand(deviceID string, command string) (string, error) {
+func (a *App) RunTerminalCommand(deviceID string, command string, credentialID string) (string, error) {
 	var device models.Device
 	if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
 		return "", fmt.Errorf("équipement introuvable: %w", err)
@@ -1076,7 +1086,11 @@ func (a *App) RunTerminalCommand(deviceID string, command string) (string, error
 		})
 	}
 
-	username, password, privateKey, err := a.getCredentials(device.CredentialID)
+	credID := device.CredentialID
+	if credID == "" {
+		credID = credentialID
+	}
+	username, password, privateKey, err := a.getCredentials(credID)
 	if err != nil {
 		emitLine(fmt.Sprintf("ERREUR credentials: %v\n", err), true)
 		return "", err
@@ -1410,8 +1424,9 @@ func (a *App) DeletePlaybook(id string) error {
 
 // PlaybookRunRequest is the input for running a playbook
 type PlaybookRunRequest struct {
-	PlaybookID string   `json:"playbook_id"`
-	DeviceIDs  []string `json:"device_ids"`
+	PlaybookID   string   `json:"playbook_id"`
+	DeviceIDs    []string `json:"device_ids"`
+	CredentialID string   `json:"credential_id"` // fallback when device has no credential
 }
 
 func (a *App) RunPlaybook(req PlaybookRunRequest) ([]playbook.ExecutionResult, error) {
@@ -1434,7 +1449,11 @@ func (a *App) RunPlaybook(req PlaybookRunRequest) ([]playbook.ExecutionResult, e
 		if device.SSHPort == 0 {
 			device.SSHPort = 22
 		}
-		username, password, _, err := a.getCredentials(device.CredentialID)
+		credID := device.CredentialID
+		if credID == "" {
+			credID = req.CredentialID
+		}
+		username, password, _, err := a.getCredentials(credID)
 		if err != nil {
 			continue
 		}

@@ -42,6 +42,15 @@ function SidebarCredentialSelector() {
     queryFn: () => backend.GetCredentials(),
   })
 
+  // Clear stale credential ID if the referenced credential no longer exists
+  useEffect(() => {
+    const list = credentials as any[]
+    if (globalCredId && list.length > 0) {
+      const exists = list.some((c: any) => c.id === globalCredId)
+      if (!exists) setGlobalCredId('')
+    }
+  }, [credentials, globalCredId, setGlobalCredId])
+
   if ((credentials as any[]).length === 0) return null
 
   return (

@@ -308,6 +308,7 @@ export default function DiffPage() {
               placeholder="Coller ou glisser-deposer la configuration B ici..." />
           </div>
         </div>
+        )}
 
         {/* Diff output */}
         <div className="flex-1 overflow-auto">
