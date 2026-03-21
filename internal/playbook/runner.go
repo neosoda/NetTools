@@ -45,6 +45,25 @@ type StepResult struct {
 	Error   string `json:"error"`
 }
 
+// StepEvent is emitted by the progress callback before and after each step.
+// Done=false means the step just started; Done=true means it finished.
+type StepEvent struct {
+	DeviceID    string
+	DeviceIP    string
+	DeviceLabel string // hostname or IP
+	StepIndex   int
+	TotalSteps  int
+	StepName    string
+	Command     string
+	Done        bool
+	Output      string
+	Passed      bool
+	Error       string
+}
+
+// ProgressFunc receives real-time step events during playbook execution.
+type ProgressFunc func(StepEvent)
+
 // Parse parses a YAML playbook
 func Parse(content string) (*PlaybookDef, error) {
 	var pb PlaybookDef
@@ -57,9 +76,23 @@ func Parse(content string) (*PlaybookDef, error) {
 	return &pb, nil
 }
 
-// Run executes a playbook on a device
-func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, password string) (*ExecutionResult, error) {
+// Run executes a playbook on a device.
+// onProgress is called before each step starts (Done=false) and after it finishes (Done=true).
+// Pass nil if no real-time feedback is needed.
+func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, password string, onProgress ProgressFunc) (*ExecutionResult, error) {
 	start := time.Now()
+
+	label := device.Hostname
+	if label == "" {
+		label = device.IP
+	}
+
+	emit := func(evt StepEvent) {
+		if onProgress != nil {
+			onProgress(evt)
+		}
+	}
+
 	result := &ExecutionResult{
 		DeviceID: device.ID,
 		DeviceIP: device.IP,
@@ -89,15 +122,27 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 	}
 	defer sess.Close()
 
-	for _, step := range pb.Steps {
+	for i, step := range pb.Steps {
 		select {
 		case <-ctx.Done():
 			return result, ctx.Err()
 		default:
 		}
 
-		sr := StepResult{Name: step.Name, Command: step.Command}
+		base := StepEvent{
+			DeviceID:    device.ID,
+			DeviceIP:    device.IP,
+			DeviceLabel: label,
+			StepIndex:   i,
+			TotalSteps:  len(pb.Steps),
+			StepName:    step.Name,
+			Command:     step.Command,
+		}
 
+		// Notify: step starting
+		emit(base)
+
+		sr := StepResult{Name: step.Name, Command: step.Command}
 		output, cmdErr := sess.RunCommandInteractive(ctx, step.Command)
 		sr.Output = output
 
@@ -105,6 +150,9 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 			sr.Error = cmdErr.Error()
 			sr.Passed = false
 			result.Steps = append(result.Steps, sr)
+			evt := base
+			evt.Done, evt.Output, evt.Passed, evt.Error = true, output, false, sr.Error
+			emit(evt)
 			if step.OnError == "abort" || step.OnError == "" {
 				result.TotalMs = time.Since(start).Milliseconds()
 				saveExecution(result, device.ID, "")
@@ -118,19 +166,21 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 			sr.Passed = strings.Contains(output, step.Expect)
 			if !sr.Passed {
 				sr.Error = fmt.Sprintf("expected '%s' not found in output", step.Expect)
-				result.Steps = append(result.Steps, sr)
-				if step.OnError == "abort" || step.OnError == "" {
-					result.TotalMs = time.Since(start).Milliseconds()
-					saveExecution(result, device.ID, "")
-					return result, fmt.Errorf("step '%s' expectation failed", step.Name)
-				}
-				continue
 			}
 		} else {
 			sr.Passed = true
 		}
 
 		result.Steps = append(result.Steps, sr)
+		evt := base
+		evt.Done, evt.Output, evt.Passed, evt.Error = true, output, sr.Passed, sr.Error
+		emit(evt)
+
+		if !sr.Passed && (step.OnError == "abort" || step.OnError == "") {
+			result.TotalMs = time.Since(start).Milliseconds()
+			saveExecution(result, device.ID, "")
+			return result, fmt.Errorf("step '%s' expectation failed", step.Name)
+		}
 	}
 
 	result.Status = "success"

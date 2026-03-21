@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Play, Trash2, FileCode, BookOpen, ChevronDown, ChevronRight, Copy, Terminal, Code } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import Input from '../components/Input'
 import { getBackend } from '../lib/backend'
 import { useGlobalCredential } from '../context/CredentialContext'
+import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 
 // ── Exemples de playbooks prêts à l'emploi ──────────────────────────────────
 const PLAYBOOK_TEMPLATES = [
@@ -170,6 +171,14 @@ function yamlToCommands(yamlContent: string): string {
   return commands.join('\n')
 }
 
+type TermLine =
+  | { type: 'device'; label: string; ip: string; index: number; total: number }
+  | { type: 'step_start'; name: string; command: string; index: number; total: number }
+  | { type: 'output'; text: string }
+  | { type: 'step_ok'; name: string }
+  | { type: 'step_err'; name: string; error: string }
+  | { type: 'device_done'; label: string; status: string }
+
 export default function PlaybookPage() {
   const qc = useQueryClient()
   const { globalCredId } = useGlobalCredential()
@@ -178,13 +187,60 @@ export default function PlaybookPage() {
   const [runModal, setRunModal] = useState<any>(null)
   const [selectedDevices, setSelectedDevices] = useState<string[]>([])
   const [results, setResults] = useState<any[]>([])
+  const [termLines, setTermLines] = useState<TermLine[]>([])
   const [activeTab, setActiveTab] = useState<'playbooks' | 'guide'>('playbooks')
   const [openSection, setOpenSection] = useState<number | null>(0)
   const [copied, setCopied] = useState<string | null>(null)
+  const termRef = useRef<HTMLDivElement>(null)
 
   // Simple vs Advanced mode for the editor
   const [editorMode, setEditorMode] = useState<'simple' | 'advanced'>('simple')
   const [simpleCommands, setSimpleCommands] = useState('')
+
+  // Real-time playbook step events
+  useEffect(() => {
+    const handler = (data: any) => {
+      if (data.type === 'device_start') {
+        setTermLines(prev => [...prev, {
+          type: 'device', label: data.device_label, ip: data.device_ip, index: 0, total: 0,
+        }])
+        return
+      }
+      if (!data.done) {
+        // Step starting
+        setTermLines(prev => [...prev, {
+          type: 'step_start', name: data.step_name, command: data.command,
+          index: data.step_index + 1, total: data.total_steps,
+        }])
+      } else {
+        // Step done: output then status
+        if (data.output?.trim()) {
+          setTermLines(prev => [...prev, { type: 'output', text: data.output.trim() }])
+        }
+        if (data.passed) {
+          setTermLines(prev => [...prev, { type: 'step_ok', name: data.step_name }])
+        } else {
+          setTermLines(prev => [...prev, { type: 'step_err', name: data.step_name, error: data.error || 'Échec' }])
+        }
+      }
+    }
+    EventsOn('playbook:step', handler)
+    return () => { EventsOff('playbook:step') }
+  }, [])
+
+  // Listen for per-device completion events
+  useEffect(() => {
+    const handler = (data: any) => {
+      setTermLines(prev => [...prev, { type: 'device_done', label: data.device_label || data.device_ip, status: data.status }])
+    }
+    EventsOn('playbook:progress', handler)
+    return () => { EventsOff('playbook:progress') }
+  }, [])
+
+  // Auto-scroll terminal
+  useEffect(() => {
+    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
+  }, [termLines])
 
   const { data: playbooks = [] } = useQuery({
     queryKey: ['playbooks'],
@@ -213,6 +269,8 @@ export default function PlaybookPage() {
   })
   const runMutation = useMutation({
     mutationFn: async () => {
+      setTermLines([])
+      setResults([])
       const m = await getBackend()
       return m.RunPlaybook({ playbook_id: runModal.id, device_ids: selectedDevices, credential_id: globalCredId })
     },
@@ -467,50 +525,88 @@ steps:
       </Modal>
 
       {/* Run modal */}
-      <Modal open={!!runModal} onClose={() => setRunModal(null)} title={`Exécuter : ${runModal?.name}`} size="lg">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-slate-400">{selectedDevices.length}/{(devices as any[]).length} équipements</p>
-            <button onClick={() => setSelectedDevices(selectedDevices.length === (devices as any[]).length ? [] : (devices as any[]).map((d: any) => d.id))}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-              {selectedDevices.length === (devices as any[]).length ? 'Tout désélectionner' : 'Tout sélectionner'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(devices as any[]).map((d: any) => (
-              <button key={d.id}
-                onClick={() => setSelectedDevices(prev => prev.includes(d.id) ? prev.filter(x => x !== d.id) : [...prev, d.id])}
-                className={`px-2 py-1 rounded text-xs border ${selectedDevices.includes(d.id) ? 'bg-blue-600/20 border-blue-600 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                {d.hostname || d.ip}
-              </button>
-            ))}
-          </div>
+      <Modal open={!!runModal} onClose={() => { setRunModal(null); setTermLines([]); setResults([]) }} title={`Exécuter : ${runModal?.name}`} size="lg">
+        <div className="space-y-3">
+          {/* Device selector — hidden while running */}
+          {!runMutation.isPending && termLines.length === 0 && (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-400">{selectedDevices.length}/{(devices as any[]).length} équipements sélectionnés</p>
+                <button onClick={() => setSelectedDevices(selectedDevices.length === (devices as any[]).length ? [] : (devices as any[]).map((d: any) => d.id))}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                  {selectedDevices.length === (devices as any[]).length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(devices as any[]).map((d: any) => (
+                  <button key={d.id}
+                    onClick={() => setSelectedDevices(prev => prev.includes(d.id) ? prev.filter(x => x !== d.id) : [...prev, d.id])}
+                    className={`px-2 py-1 rounded text-xs border transition-colors ${selectedDevices.includes(d.id) ? 'bg-blue-600/20 border-blue-600 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                    {d.hostname || d.ip}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
           <Button variant="primary" loading={runMutation.isPending}
             disabled={selectedDevices.length === 0} onClick={() => runMutation.mutate()}>
-            <Play className="w-4 h-4" /> Exécuter ({selectedDevices.length})
+            <Play className="w-4 h-4" />
+            {runMutation.isPending ? 'Exécution en cours…' : `Exécuter (${selectedDevices.length})`}
           </Button>
-          {results.map((r: any, i: number) => (
-            <div key={i} className="bg-slate-950 rounded-lg p-3">
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-medium text-white">{r.DeviceIP}</span>
-                <span className={r.Status === 'success' ? 'text-green-400 text-sm' : 'text-red-400 text-sm'}>{r.Status}</span>
-              </div>
-              {(r.Steps || []).map((s: any, j: number) => (
-                <div key={j} className="mb-2 border-l-2 border-slate-700 pl-3">
-                  <p className="text-xs text-slate-400">
-                    {s.passed ? '✓' : '✗'} <span className="text-slate-300">{s.name}</span>
-                    {' '}<code className="text-blue-400 font-mono">{s.command}</code>
-                  </p>
-                  {s.output && (
-                    <pre className="text-xs text-slate-400 pl-2 mt-1 max-h-24 overflow-y-auto font-mono bg-slate-900 p-2 rounded">
-                      {s.output}
-                    </pre>
-                  )}
-                  {s.error && <p className="text-xs text-red-400 pl-2">{s.error}</p>}
-                </div>
-              ))}
+
+          {/* Terminal temps réel */}
+          {(runMutation.isPending || termLines.length > 0) && (
+            <div ref={termRef}
+              className="bg-slate-950 border border-slate-800 rounded-lg p-3 h-80 overflow-y-auto font-mono text-xs space-y-0.5">
+              {termLines.map((line, i) => {
+                if (line.type === 'device') return (
+                  <div key={i} className="text-cyan-400 mt-2 first:mt-0">
+                    ── {line.label} ({line.ip}) — device {line.index}/{line.total} ──
+                  </div>
+                )
+                if (line.type === 'step_start') return (
+                  <div key={i} className="text-slate-400 mt-1">
+                    <span className="text-slate-600">[{line.index}/{line.total}]</span>{' '}
+                    <span className="text-slate-300">{line.name}</span>
+                    {' '}<span className="text-blue-400">$ {line.command}</span>
+                  </div>
+                )
+                if (line.type === 'output') return (
+                  <pre key={i} className="text-slate-400 pl-4 whitespace-pre-wrap break-all leading-relaxed">
+                    {line.text}
+                  </pre>
+                )
+                if (line.type === 'step_ok') return (
+                  <div key={i} className="text-green-400 pl-4">✓ {line.name}</div>
+                )
+                if (line.type === 'step_err') return (
+                  <div key={i} className="text-red-400 pl-4">✗ {line.name} — {line.error}</div>
+                )
+                if (line.type === 'device_done') return (
+                  <div key={i} className={`mt-1 font-medium ${line.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                    {line.status === 'success' ? '✓' : '✗'} {line.label} terminé ({line.status})
+                  </div>
+                )
+                return null
+              })}
+              {runMutation.isPending && (
+                <div className="text-slate-500 animate-pulse">▌</div>
+              )}
             </div>
-          ))}
+          )}
+
+          {/* Résumé final (après exécution complète) */}
+          {!runMutation.isPending && results.length > 0 && (
+            <div className="text-xs text-slate-500 border-t border-slate-800 pt-2">
+              {results.filter((r: any) => r.Status === 'success').length}/{results.length} équipements OK
+              {results.some((r: any) => r.Status !== 'success') && (
+                <span className="text-red-400 ml-2">
+                  — Échecs : {results.filter((r: any) => r.Status !== 'success').map((r: any) => r.DeviceIP).join(', ')}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </div>

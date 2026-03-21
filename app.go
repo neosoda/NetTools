@@ -1458,8 +1458,36 @@ func (a *App) RunPlaybook(req PlaybookRunRequest) ([]playbook.ExecutionResult, e
 			continue
 		}
 
+		deviceLabel := device.Hostname
+		if deviceLabel == "" {
+			deviceLabel = device.IP
+		}
+		runtime.EventsEmit(a.ctx, "playbook:step", map[string]interface{}{
+			"type":         "device_start",
+			"device_id":    device.ID,
+			"device_ip":    device.IP,
+			"device_label": deviceLabel,
+		})
+
 		ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
-		result, runErr := playbook.Run(ctx, def, device, username, password)
+		result, runErr := playbook.Run(ctx, def, device, username, password, func(evt playbook.StepEvent) {
+			data := map[string]interface{}{
+				"device_id":    evt.DeviceID,
+				"device_ip":    evt.DeviceIP,
+				"device_label": evt.DeviceLabel,
+				"step_index":   evt.StepIndex,
+				"total_steps":  evt.TotalSteps,
+				"step_name":    evt.StepName,
+				"command":      evt.Command,
+				"done":         evt.Done,
+			}
+			if evt.Done {
+				data["output"] = evt.Output
+				data["passed"] = evt.Passed
+				data["error"] = evt.Error
+			}
+			runtime.EventsEmit(a.ctx, "playbook:step", data)
+		})
 		cancel()
 
 		if result != nil {
