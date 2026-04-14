@@ -1,8 +1,11 @@
 package playbook
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -16,25 +19,28 @@ import (
 
 // PlaybookDef defines the YAML structure
 type PlaybookDef struct {
-	Name     string `yaml:"name"`
-	Timeout  string `yaml:"timeout"`
-	Steps    []Step `yaml:"steps"`
+	Name              string `yaml:"name"`
+	Timeout           string `yaml:"timeout"`
+	Executor          string `yaml:"executor"`            // native|netmiko
+	NetmikoDeviceType string `yaml:"netmiko_device_type"` // optional, defaults from vendor
+	Steps             []Step `yaml:"steps"`
 }
 
 type Step struct {
-	Name    string   `yaml:"name"`
-	Command string   `yaml:"command"`
-	Expect  string   `yaml:"expect"`
-	OnError string   `yaml:"on_error"` // continue|abort
+	Name     string   `yaml:"name"`
+	Command  string   `yaml:"command"`
+	Commands []string `yaml:"commands"`
+	Expect   string   `yaml:"expect"`
+	OnError  string   `yaml:"on_error"` // continue|abort
 }
 
 // ExecutionResult holds the result of a playbook run on a device
 type ExecutionResult struct {
-	DeviceID    string
-	DeviceIP    string
-	Steps       []StepResult
-	Status      string
-	TotalMs     int64
+	DeviceID string
+	DeviceIP string
+	Steps    []StepResult
+	Status   string
+	TotalMs  int64
 }
 
 type StepResult struct {
@@ -73,6 +79,11 @@ func Parse(content string) (*PlaybookDef, error) {
 	if len(pb.Steps) == 0 {
 		return nil, fmt.Errorf("playbook has no steps")
 	}
+	for i, step := range pb.Steps {
+		if len(step.commandList()) == 0 {
+			return nil, fmt.Errorf("step %d has no command", i+1)
+		}
+	}
 	return &pb, nil
 }
 
@@ -81,6 +92,10 @@ func Parse(content string) (*PlaybookDef, error) {
 // Pass nil if no real-time feedback is needed.
 func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, password string, onProgress ProgressFunc) (*ExecutionResult, error) {
 	start := time.Now()
+
+	if strings.EqualFold(pb.Executor, "netmiko") {
+		return runWithNetmiko(ctx, start, pb, device, username, password, onProgress)
+	}
 
 	label := device.Hostname
 	if label == "" {
@@ -187,6 +202,175 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 	result.TotalMs = time.Since(start).Milliseconds()
 	saveExecution(result, device.ID, "")
 	return result, nil
+}
+
+type netmikoPayload struct {
+	Device            netmikoDevicePayload `json:"device"`
+	TimeoutSeconds    int                  `json:"timeout_seconds"`
+	GlobalDelayFactor float64              `json:"global_delay_factor"`
+	Steps             []netmikoStepPayload `json:"steps"`
+}
+
+type netmikoDevicePayload struct {
+	DeviceType string `json:"device_type"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+}
+
+type netmikoStepPayload struct {
+	Name     string   `json:"name"`
+	Commands []string `json:"commands"`
+	Expect   string   `json:"expect"`
+	OnError  string   `json:"on_error"`
+}
+
+type netmikoResult struct {
+	Status string       `json:"status"`
+	Steps  []StepResult `json:"steps"`
+	Error  string       `json:"error"`
+}
+
+func (s Step) commandList() []string {
+	if len(s.Commands) > 0 {
+		return s.Commands
+	}
+	if strings.TrimSpace(s.Command) == "" {
+		return nil
+	}
+	return []string{s.Command}
+}
+
+func runWithNetmiko(ctx context.Context, start time.Time, pb *PlaybookDef, device models.Device, username, password string, onProgress ProgressFunc) (*ExecutionResult, error) {
+	label := device.Hostname
+	if label == "" {
+		label = device.IP
+	}
+
+	emit := func(evt StepEvent) {
+		if onProgress != nil {
+			onProgress(evt)
+		}
+	}
+
+	result := &ExecutionResult{
+		DeviceID: device.ID,
+		DeviceIP: device.IP,
+		Status:   "failed",
+	}
+
+	timeout := 60 * time.Second
+	if pb.Timeout != "" {
+		if d, err := time.ParseDuration(pb.Timeout); err == nil {
+			timeout = d
+		}
+	}
+
+	stepsPayload := make([]netmikoStepPayload, 0, len(pb.Steps))
+	for i, step := range pb.Steps {
+		commands := step.commandList()
+		joinedCommand := strings.Join(commands, " && ")
+
+		base := StepEvent{
+			DeviceID:    device.ID,
+			DeviceIP:    device.IP,
+			DeviceLabel: label,
+			StepIndex:   i,
+			TotalSteps:  len(pb.Steps),
+			StepName:    step.Name,
+			Command:     joinedCommand,
+		}
+		emit(base)
+		stepsPayload = append(stepsPayload, netmikoStepPayload{
+			Name:     step.Name,
+			Commands: commands,
+			Expect:   step.Expect,
+			OnError:  step.OnError,
+		})
+	}
+
+	deviceType := strings.TrimSpace(pb.NetmikoDeviceType)
+	if deviceType == "" {
+		deviceType = netmikoDeviceTypeFromVendor(device.Vendor)
+	}
+
+	payload := netmikoPayload{
+		Device: netmikoDevicePayload{
+			DeviceType: deviceType,
+			Host:       device.IP,
+			Port:       device.SSHPort,
+			Username:   username,
+			Password:   password,
+		},
+		TimeoutSeconds:    int(timeout.Seconds()),
+		GlobalDelayFactor: 1.0,
+		Steps:             stepsPayload,
+	}
+
+	input, err := json.Marshal(payload)
+	if err != nil {
+		return result, fmt.Errorf("marshal netmiko payload: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, "python3", "tools/netmiko_runner.py")
+	cmd.Stdin = bytes.NewReader(input)
+	raw, err := cmd.CombinedOutput()
+	if err != nil {
+		return result, fmt.Errorf("netmiko runner failed: %w: %s", err, strings.TrimSpace(string(raw)))
+	}
+
+	var nmResult netmikoResult
+	if err := json.Unmarshal(raw, &nmResult); err != nil {
+		return result, fmt.Errorf("invalid netmiko runner output: %w", err)
+	}
+	if nmResult.Error != "" {
+		return result, fmt.Errorf("netmiko runner error: %s", nmResult.Error)
+	}
+
+	result.Steps = nmResult.Steps
+	result.Status = nmResult.Status
+	result.TotalMs = time.Since(start).Milliseconds()
+
+	for i, sr := range result.Steps {
+		base := StepEvent{
+			DeviceID:    device.ID,
+			DeviceIP:    device.IP,
+			DeviceLabel: label,
+			StepIndex:   i,
+			TotalSteps:  len(pb.Steps),
+			StepName:    sr.Name,
+			Command:     sr.Command,
+			Done:        true,
+			Output:      sr.Output,
+			Passed:      sr.Passed,
+			Error:       sr.Error,
+		}
+		emit(base)
+	}
+
+	saveExecution(result, device.ID, "")
+	if result.Status != "success" {
+		return result, fmt.Errorf("netmiko playbook failed")
+	}
+	return result, nil
+}
+
+func netmikoDeviceTypeFromVendor(vendor string) string {
+	switch strings.ToLower(strings.TrimSpace(vendor)) {
+	case "cisco":
+		return "cisco_ios"
+	case "aruba", "hp":
+		return "hp_procurve"
+	case "hpe", "huawei":
+		return "hp_comware"
+	case "fortinet":
+		return "fortinet"
+	case "allied":
+		return "cisco_ios"
+	default:
+		return "autodetect"
+	}
 }
 
 func saveExecution(result *ExecutionResult, deviceID, playbookID string) {
