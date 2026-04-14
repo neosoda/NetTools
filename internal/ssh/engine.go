@@ -120,8 +120,16 @@ func (e *Engine) execute(ctx context.Context, job Job) Result {
 	}
 	defer sess.Close()
 
+	shell, err := sess.OpenInteractiveShell(ctx)
+	if err != nil {
+		r.Error = fmt.Errorf("open interactive shell: %w", err)
+		r.Duration = time.Since(start)
+		return r
+	}
+	defer shell.Close()
+
 	for _, cmd := range job.Commands {
-		output, cmdErr := sess.RunCommandInteractive(ctx, cmd)
+		output, cmdErr := shell.Run(ctx, cmd)
 		if cmdErr != nil {
 			r.Outputs[cmd] = fmt.Sprintf("ERROR: %v", cmdErr)
 		} else {

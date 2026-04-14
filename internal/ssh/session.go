@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"sync"
@@ -44,6 +45,14 @@ type VendorConfig struct {
 	BannerSend        string
 	BackupCommand     map[string]string // "running" -> command
 	DisablePaging     string            // command to disable paging (sent before main command)
+	RecoveryRules     []RecoveryRule    // rules to fix common errors automatically
+}
+
+// RecoveryRule defines a pattern to match an error and a command to fix it
+type RecoveryRule struct {
+	ErrorPattern   *regexp.Regexp
+	CommandPattern *regexp.Regexp // Optional: only apply to certain commands
+	RetryCommand   string         // Command to run before retrying original command
 }
 
 var vendorConfigs = map[string]VendorConfig{
@@ -106,6 +115,14 @@ var vendorConfigs = map[string]VendorConfig{
 		BannerSend:        "\r",
 		BackupCommand:     map[string]string{"running": "show running-config", "startup": "show startup-config"},
 		DisablePaging:     "terminal length 0",
+		RecoveryRules: []RecoveryRule{
+			{
+				// AlliedWare Plus requires "vlan database" mode for VLAN config
+				ErrorPattern:   regexp.MustCompile(`(?i)% Invalid input.*marker`),
+				CommandPattern: regexp.MustCompile(`(?i)^(vlan|name)\s+`),
+				RetryCommand:   "vlan database",
+			},
+		},
 	},
 	"fortinet": {
 		// Fortinet FortiOS (FortiGate, FortiSwitch) — SSH exec channel works well; no pagination.
@@ -186,6 +203,16 @@ var ansiPattern = regexp.MustCompile(
 // Session represents an SSH session to a network device
 type Session struct {
 	client  *ssh.Client
+	vendor  string
+	timeout time.Duration
+}
+
+// InteractiveShell manages a persistent PTY session
+type InteractiveShell struct {
+	sess    *ssh.Session
+	stdin   io.WriteCloser
+	stdout  *safeBuffer
+	vc      VendorConfig
 	vendor  string
 	timeout time.Duration
 }
@@ -328,13 +355,24 @@ func (s *Session) RunCommand(ctx context.Context, command string) (string, error
 	}
 }
 
-// RunCommandInteractive runs a command in an interactive shell (handles pagination & banners)
+// RunCommandInteractive runs a command in an interactive shell (handles pagination & banners).
+// This is a shorthand for OpenInteractiveShell + Run + Close.
 func (s *Session) RunCommandInteractive(ctx context.Context, command string) (string, error) {
+	shell, err := s.OpenInteractiveShell(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer shell.Close()
+
+	return shell.Run(ctx, command)
+}
+
+// OpenInteractiveShell initializes a persistent interactive shell (handles banners & paging)
+func (s *Session) OpenInteractiveShell(ctx context.Context) (*InteractiveShell, error) {
 	sess, err := s.client.NewSession()
 	if err != nil {
-		return "", fmt.Errorf("new session: %w", err)
+		return nil, fmt.Errorf("new session: %w", err)
 	}
-	defer sess.Close()
 
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          0,
@@ -342,12 +380,14 @@ func (s *Session) RunCommandInteractive(ctx context.Context, command string) (st
 		ssh.TTY_OP_OSPEED: 115200,
 	}
 	if err := sess.RequestPty("vt100", 512, 512, modes); err != nil {
-		return "", fmt.Errorf("pty request: %w", err)
+		sess.Close()
+		return nil, fmt.Errorf("pty request: %w", err)
 	}
 
 	stdin, err := sess.StdinPipe()
 	if err != nil {
-		return "", fmt.Errorf("stdin pipe: %w", err)
+		sess.Close()
+		return nil, fmt.Errorf("stdin pipe: %w", err)
 	}
 
 	var sb safeBuffer
@@ -355,12 +395,21 @@ func (s *Session) RunCommandInteractive(ctx context.Context, command string) (st
 	sess.Stderr = &sb
 
 	if err := sess.Shell(); err != nil {
-		return "", fmt.Errorf("shell: %w", err)
+		sess.Close()
+		return nil, fmt.Errorf("shell: %w", err)
 	}
 
-	vc := vendorConfigs[s.vendor]
-	if _, ok := vendorConfigs[s.vendor]; !ok {
-		vc = vendorConfigs["unknown"]
+	shell := &InteractiveShell{
+		sess:    sess,
+		stdin:   stdin,
+		stdout:  &sb,
+		vendor:  s.vendor,
+		timeout: s.timeout,
+	}
+
+	shell.vc = vendorConfigs[shell.vendor]
+	if _, ok := vendorConfigs[shell.vendor]; !ok {
+		shell.vc = vendorConfigs["unknown"]
 	}
 
 	// Phase 1: Wait for initial prompt or banner, with banner auto-dismiss
@@ -372,40 +421,39 @@ waitLoop:
 		select {
 		case <-ctx.Done():
 			waitReady.Stop()
-			return "", ctx.Err()
+			shell.Close()
+			return nil, ctx.Err()
 		case <-readyDeadline:
 			waitReady.Stop()
 			break waitLoop
 		case <-waitReady.C:
 			current := sb.String()
-			// Check for "Press any key" banners and auto-dismiss
-			if !bannerDismissed && vc.BannerPattern != nil && vc.BannerPattern.MatchString(current) {
-				fmt.Fprint(stdin, vc.BannerSend)
+			if !bannerDismissed && shell.vc.BannerPattern != nil && shell.vc.BannerPattern.MatchString(current) {
+				fmt.Fprint(stdin, shell.vc.BannerSend)
 				bannerDismissed = true
 				continue
 			}
-			if hasTerminalPrompt(vc.PromptPattern, current) {
+			if hasTerminalPrompt(shell.vc.PromptPattern, current) {
 				waitReady.Stop()
 				break waitLoop
 			}
 		}
 	}
 
-	// Phase 1.5: if vendor was unknown, try to detect from the initial banner/MOTD output.
-	// This allows Phase 2 (disable paging) to use the correct vendor-specific command.
-	if s.vendor == "unknown" {
+	// Phase 1.5: if vendor was unknown, try to detect from the initial banner/MOTD output
+	if shell.vendor == "unknown" {
 		if detected := DetectVendorFromBanner(sb.String()); detected != "" {
-			s.vendor = detected
-			if newVC, ok := vendorConfigs[s.vendor]; ok {
-				vc = newVC
+			shell.vendor = detected
+			s.vendor = detected // Update session vendor too
+			if newVC, ok := vendorConfigs[shell.vendor]; ok {
+				shell.vc = newVC
 			}
 		}
 	}
 
 	// Phase 2: Send disable-paging command if supported
-	if vc.DisablePaging != "" {
-		fmt.Fprintf(stdin, "%s\r", vc.DisablePaging)
-		// Wait briefly for the command to be processed
+	if shell.vc.DisablePaging != "" {
+		fmt.Fprintf(stdin, "%s\r", shell.vc.DisablePaging)
 		pagingWait := time.NewTicker(100 * time.Millisecond)
 		pagingDeadline := time.After(5 * time.Second)
 		prevLen := sb.Len()
@@ -415,14 +463,15 @@ waitLoop:
 			select {
 			case <-ctx.Done():
 				pagingWait.Stop()
-				return "", ctx.Err()
+				shell.Close()
+				return nil, ctx.Err()
 			case <-pagingDeadline:
 				pagingWait.Stop()
 				break pagingLoop
 			case <-pagingWait.C:
 				if sb.Len() == prevLen {
 					stableCount++
-					if stableCount >= 5 && hasTerminalPrompt(vc.PromptPattern, sb.String()) {
+					if stableCount >= 5 && hasTerminalPrompt(shell.vc.PromptPattern, sb.String()) {
 						pagingWait.Stop()
 						break pagingLoop
 					}
@@ -434,14 +483,52 @@ waitLoop:
 		}
 	}
 
-	// Phase 3: Send the actual command
-	fmt.Fprintf(stdin, "%s\r", command)
+	return shell, nil
+}
 
-	// Phase 4: Read output with pagination handling (non-blocking)
+// Run executes a command in the interactive shell and waits for output/prompt.
+// It includes a smart "recovery" mechanism to auto-correct common syntax errors.
+func (sh *InteractiveShell) Run(ctx context.Context, command string) (string, error) {
+	output, err := sh.runOnce(ctx, command)
+	if err != nil {
+		return output, err
+	}
+
+	// Check for known error patterns that have recovery rules
+	for _, rule := range sh.vc.RecoveryRules {
+		if rule.ErrorPattern.MatchString(output) {
+			if rule.CommandPattern == nil || rule.CommandPattern.MatchString(command) {
+				// We found a matching error and command! Try to recover.
+				_, recErr := sh.runOnce(ctx, rule.RetryCommand)
+				if recErr == nil {
+					// Preamble sent successfully. Retry the original command once.
+					retryOutput, retryErr := sh.runOnce(ctx, command)
+					if retryErr == nil {
+						// Return combined output with a notice about the auto-fix
+						return fmt.Sprintf("[AUTO-FIX: Applied '%s']\n%s", rule.RetryCommand, retryOutput), nil
+					}
+					// If retry fails, we return the original error output
+				}
+			}
+		}
+	}
+
+	return output, nil
+}
+
+// runOnce executes a command once and returns the raw output
+func (sh *InteractiveShell) runOnce(ctx context.Context, command string) (string, error) {
+	// Start reading from the current buffer point
+	startLen := sh.stdout.Len()
+
+	// Phase 3: Send the actual command
+	fmt.Fprintf(sh.stdin, "%s\r", command)
+
+	// Phase 4: Read output with pagination handling
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deadline := time.After(s.timeout)
+		deadline := time.After(sh.timeout)
 		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		lastLen := -1
@@ -454,30 +541,23 @@ waitLoop:
 			case <-deadline:
 				return
 			case <-tick.C:
-				currentLen := sb.Len()
-				// Only check the tail of the buffer for pagination/prompt (performance)
+				currentLen := sh.stdout.Len()
 				tailStart := currentLen - 200
 				if tailStart < 0 {
 					tailStart = 0
 				}
-				tail := sb.String()[tailStart:]
+				tail := sh.stdout.String()[tailStart:]
 
-				// Handle pagination prompts — check tail only
-				if vc.PaginationPattern != nil && vc.PaginationPattern.MatchString(tail) {
-					fmt.Fprint(stdin, vc.PaginationSend)
+				if sh.vc.PaginationPattern != nil && sh.vc.PaginationPattern.MatchString(tail) {
+					fmt.Fprint(sh.stdin, sh.vc.PaginationSend)
 					stableCount = 0
 					lastLen = currentLen
 					continue
 				}
 
-				// Note: banner detection is intentionally NOT done here (Phase 4).
-				// Banners are only dismissed in Phase 1 (initial connection).
-				// Checking BannerPattern during command output can cause false-positive
-				// matches on config lines that happen to contain banner-like words.
-
 				if currentLen == lastLen {
 					stableCount++
-					if stableCount >= 10 && hasTerminalPrompt(vc.PromptPattern, tail) {
+					if stableCount >= 10 && hasTerminalPrompt(sh.vc.PromptPattern, tail) {
 						return
 					}
 					if stableCount >= 30 && configOutputLooksComplete(command, tail) {
@@ -495,16 +575,22 @@ waitLoop:
 	}()
 	<-done
 
-	stdin.Close()
-	// Don't block on sess.Wait() — some devices don't cleanly close
-	waitDone := make(chan error, 1)
-	go func() { waitDone <- sess.Wait() }()
-	select {
-	case <-waitDone:
-	case <-time.After(3 * time.Second):
+	fullOutput := sh.stdout.String()
+	newOutput := ""
+	if startLen < len(fullOutput) {
+		newOutput = fullOutput[startLen:]
 	}
 
-	return CleanOutput(sb.String()), nil
+	return CleanOutput(newOutput), nil
+}
+
+func (sh *InteractiveShell) Close() {
+	if sh.stdin != nil {
+		sh.stdin.Close()
+	}
+	if sh.sess != nil {
+		sh.sess.Close()
+	}
 }
 
 // CleanOutput removes ANSI codes, control characters, and normalizes line endings

@@ -137,6 +137,12 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 	}
 	defer sess.Close()
 
+	shell, err := sess.OpenInteractiveShell(ctx)
+	if err != nil {
+		return result, fmt.Errorf("open interactive shell: %w", err)
+	}
+	defer shell.Close()
+
 	for i, step := range pb.Steps {
 		select {
 		case <-ctx.Done():
@@ -158,7 +164,7 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 		emit(base)
 
 		sr := StepResult{Name: step.Name, Command: step.Command}
-		output, cmdErr := sess.RunCommandInteractive(ctx, step.Command)
+		output, cmdErr := shell.Run(ctx, step.Command)
 		sr.Output = output
 
 		if cmdErr != nil {
