@@ -6,7 +6,7 @@
 
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
-[![GitHub release](https://img.shields.io/github/v/release/neosoda/nettools_claude?color=blue&label=Version&logo=github)](../../releases)
+[![GitHub release](https://img.shields.io/github/v/release/neosoda/NetTools?color=blue&label=Version&logo=github)](../../releases)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
 [![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -92,6 +92,7 @@
 - Modèles YAML prêts à l'emploi
 - Terminal temps réel intégré
 - **4 templates** : inventaire, sécurité, VLAN, diagnostic
+- **Smart Syntax Agent** : Auto-correction intelligente (ex: `vlan database` automatique)
 - Gestion d'erreurs et expectations
 - Résultats pas-à-pas
 
@@ -194,9 +195,9 @@
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.3.0](../../releases/download/v1.3.0/NetTools.exe)
+### [⬇️ Télécharger NetTools v1.3.1](../../releases/download/v1.3.1/NetTools.exe)
 
-**Windows 10/11 • 64-bit • ~20 MB**
+**Windows 10/11 • 64-bit • ~21 MB**
 
 </div>
 
@@ -267,7 +268,7 @@ Comparateur → Sélectionner 2 backups → Configurer filtres → Exporter HTML
 | **HPE Comware** | `display current-configuration` | ✅ Interactive |
 | **Huawei VRP** | `display current-configuration` | ✅ Interactive |
 | **Fortinet FortiOS** | `show full-configuration` | ✅ Exec |
-| **Allied Telesis** | `show running-config` | ✅ Exec |
+| **Allied Telesis** | `show running-config` | ✅ Smart CLI (Auto-fix) |
 
 ---
 
