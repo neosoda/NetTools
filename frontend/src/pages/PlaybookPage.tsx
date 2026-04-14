@@ -436,15 +436,21 @@ export default function PlaybookPage() {
                 <pre className="text-[11px] text-slate-400 bg-slate-950/80 p-4 rounded-xl font-mono leading-relaxed border border-white/[0.02] custom-scrollbar overflow-x-auto shadow-inner">{`name: Mon playbook
 description: Description de ce que fait ce playbook
 timeout: 120s        # Délai max total
+executor: netmiko    # Exécution CLI stateful (recommandé pour config)
+netmiko_device_type: cisco_ios  # optionnel
 
 steps:
   - name: Vérification connexion
     command: show version
     on_error: abort  # Arrête si pas de connexion
 
-  - name: Collecte VLANs
-    command: show vlan brief
-    on_error: continue  # Continue même si erreur
+  - name: Création VLAN (session interactive conservée)
+    commands:
+      - configure terminal
+      - vlan 10
+      - name USERS
+      - end
+    on_error: abort
 
   - name: Vérification NTP
     command: show ntp status
