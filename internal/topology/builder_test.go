@@ -69,7 +69,7 @@ func TestDetectSubnetEdges(t *testing.T) {
 		{ID: "d4", IP: "10.0.0.1"},
 	}
 
-	edges := detectSubnetEdges(devices)
+	edges := detectSubnetEdges(devices, 0)
 
 	// d1, d2, d3 share 192.168.1.0/24 -> 2 edges (star from d1)
 	// d4 is alone in 10.0.0.0/24 -> 0 edges
@@ -93,7 +93,7 @@ func TestDetectSubnetEdgesInvalidIP(t *testing.T) {
 		{ID: "d1", IP: "not-an-ip"},
 		{ID: "d2", IP: "192.168.1.1"},
 	}
-	edges := detectSubnetEdges(devices)
+	edges := detectSubnetEdges(devices, 0)
 	if len(edges) != 0 {
 		t.Errorf("expected 0 edges with single valid device, got %d", len(edges))
 	}
@@ -103,14 +103,14 @@ func TestDetectSubnetEdgesSingleDevice(t *testing.T) {
 	devices := []models.Device{
 		{ID: "d1", IP: "192.168.1.1"},
 	}
-	edges := detectSubnetEdges(devices)
+	edges := detectSubnetEdges(devices, 0)
 	if len(edges) != 0 {
 		t.Errorf("expected 0 edges with single device, got %d", len(edges))
 	}
 }
 
 func TestDetectSubnetEdgesEmpty(t *testing.T) {
-	edges := detectSubnetEdges(nil)
+	edges := detectSubnetEdges(nil, 0)
 	if len(edges) != 0 {
 		t.Errorf("expected 0 edges for nil devices, got %d", len(edges))
 	}

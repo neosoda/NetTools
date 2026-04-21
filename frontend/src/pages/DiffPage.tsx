@@ -5,7 +5,7 @@ import Button from '../components/Button'
 import { getBackend } from '../lib/backend'
 
 interface DiffLine {
-  type: 'equal' | 'insert' | 'delete'
+  type: string
   content: string
   line_a: number
   line_b: number
