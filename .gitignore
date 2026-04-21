@@ -1,6 +1,7 @@
 build/bin/
 node_modules/
-frontend/dist/
+frontend/dist/*
+!frontend/dist/.keep
 frontend/node_modules/
 *.db
 *.db-shm

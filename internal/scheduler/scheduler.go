@@ -58,31 +58,40 @@ func (s *Scheduler) loadFromDB(ctx context.Context) {
 	}
 	for _, job := range jobs {
 		j := job
-		s.schedule(ctx, &j)
+		if err := s.schedule(ctx, &j); err != nil {
+			logger.Error(fmt.Sprintf("failed to schedule job %s during startup", j.Name), err)
+		}
 	}
 }
 
 // scheduleUnlocked registers a job in the cron engine. Must be called with s.mu held.
-func (s *Scheduler) scheduleUnlocked(ctx context.Context, job *models.ScheduledJob) {
-	if id, ok := s.entryIDs[job.ID]; ok {
-		s.cron.Remove(id)
-		delete(s.entryIDs, job.ID)
-	}
-
+func (s *Scheduler) scheduleUnlocked(ctx context.Context, job *models.ScheduledJob) error {
+	oldID, hadOld := s.entryIDs[job.ID]
 	entryID, err := s.cron.AddFunc(job.CronExpression, func() {
 		s.executeJob(ctx, job)
 	})
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to schedule job %s: invalid cron expression '%s'", job.Name, job.CronExpression), err)
-		return
+		return fmt.Errorf("invalid cron expression '%s': %w", job.CronExpression, err)
+	}
+	if hadOld {
+		s.cron.Remove(oldID)
 	}
 	s.entryIDs[job.ID] = entryID
+	return nil
 }
 
-func (s *Scheduler) schedule(ctx context.Context, job *models.ScheduledJob) {
+func (s *Scheduler) schedule(ctx context.Context, job *models.ScheduledJob) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.scheduleUnlocked(ctx, job)
+	return s.scheduleUnlocked(ctx, job)
+}
+
+func validateCronExpression(expr string) error {
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	if _, err := parser.Parse(expr); err != nil {
+		return fmt.Errorf("invalid cron expression '%s': %w", expr, err)
+	}
+	return nil
 }
 
 func (s *Scheduler) executeJob(ctx context.Context, job *models.ScheduledJob) {
@@ -132,11 +141,13 @@ func (s *Scheduler) executeJob(ctx context.Context, job *models.ScheduledJob) {
 
 // AddJob persists and schedules a job (create or update)
 func (s *Scheduler) AddJob(ctx context.Context, job *models.ScheduledJob) error {
+	if err := validateCronExpression(job.CronExpression); err != nil {
+		return err
+	}
 	if err := db.DB.Save(job).Error; err != nil {
 		return err
 	}
-	s.schedule(ctx, job)
-	return nil
+	return s.schedule(ctx, job)
 }
 
 // RemoveJob removes a job from DB and the cron scheduler
@@ -172,7 +183,14 @@ func (s *Scheduler) ToggleJob(ctx context.Context, jobID string, enabled bool) e
 		}
 	} else {
 		// Call scheduleUnlocked directly — mutex is already held
-		s.scheduleUnlocked(ctx, &job)
+		if err := validateCronExpression(job.CronExpression); err != nil {
+			return err
+		}
+		if err := s.scheduleUnlocked(ctx, &job); err != nil {
+			job.Enabled = false
+			_ = db.DB.Save(&job).Error
+			return err
+		}
 	}
 	return nil
 }

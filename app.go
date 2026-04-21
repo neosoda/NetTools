@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"net"
 	"sync"
 	"time"
 
@@ -27,8 +27,8 @@ import (
 	"nettools/internal/topology"
 
 	"github.com/google/uuid"
-	"github.com/xuri/excelize/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
 
@@ -76,6 +76,7 @@ func (a *App) startup(ctx context.Context) {
 			Title:   "Database Error",
 			Message: "Failed to initialize database: " + err.Error(),
 		})
+		runtime.Quit(ctx)
 		return
 	}
 
@@ -294,20 +295,31 @@ type CredentialInput struct {
 }
 
 func (a *App) SaveCredential(input CredentialInput) (*models.CredentialView, error) {
-	cred := models.Credential{
-		Name:             input.Name,
-		Username:         input.Username,
-		SNMPVersion:      input.SNMPVersion,
-		SNMPAuthProtocol: input.SNMPAuthProtocol,
-		SNMPPrivProtocol: input.SNMPPrivProtocol,
-		SNMPUsername:     input.SNMPUsername,
-	}
+	var (
+		cred     models.Credential
+		isUpdate bool
+	)
 
 	if input.ID != "" {
-		cred.ID = input.ID
-	} else {
+		err := db.DB.First(&cred, "id = ?", input.ID).Error
+		if err == nil {
+			isUpdate = true
+		} else if err == gorm.ErrRecordNotFound {
+			cred.ID = input.ID
+		} else {
+			return nil, err
+		}
+	}
+	if cred.ID == "" {
 		cred.ID = uuid.NewString()
 	}
+
+	cred.Name = input.Name
+	cred.Username = input.Username
+	cred.SNMPVersion = input.SNMPVersion
+	cred.SNMPAuthProtocol = input.SNMPAuthProtocol
+	cred.SNMPPrivProtocol = input.SNMPPrivProtocol
+	cred.SNMPUsername = input.SNMPUsername
 
 	var err error
 	if input.Password != "" {
@@ -343,6 +355,11 @@ func (a *App) SaveCredential(input CredentialInput) (*models.CredentialView, err
 
 	if err := db.DB.Save(&cred).Error; err != nil {
 		return nil, err
+	}
+	if isUpdate {
+		logger.AuditAction(a.ctx, "credential_updated", "credential", cred.ID, cred.Name, "success", 0)
+	} else {
+		logger.AuditAction(a.ctx, "credential_created", "credential", cred.ID, cred.Name, "success", 0)
 	}
 
 	view := &models.CredentialView{
@@ -405,7 +422,7 @@ func (a *App) getSNMPCommunity(credentialID string) (string, error) {
 // ScanRequest is the input for a network scan
 type ScanRequest struct {
 	CIDR         string   `json:"cidr"`
-	IPList       []string `json:"ip_list"`    // Manual list of IPs (alternative to CIDR)
+	IPList       []string `json:"ip_list"` // Manual list of IPs (alternative to CIDR)
 	Community    string   `json:"community"`
 	CredentialID string   `json:"credential_id"`
 	Workers      int      `json:"workers"`
@@ -1567,7 +1584,7 @@ func (a *App) CollectLLDP() error {
 				links, err := snmp.CollectLLDPNeighbors(dev.IP, uint16(dev.SNMPPort), community, dev.SNMPVersion, snmp.ScanParams{})
 				if err != nil || len(links) == 0 {
 					results <- deviceLinks{deviceID: dev.ID, links: nil}
-					return
+					continue
 				}
 				results <- deviceLinks{deviceID: dev.ID, links: links}
 			}

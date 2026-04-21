@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { cn } from './lib/utils'
 import logo from './assets/images/logo.png'
-import { EventsOn } from '../wailsjs/runtime/runtime'
+import { EventsOn, WindowSetTitle } from '../wailsjs/runtime/runtime'
 import { CredentialProvider, useGlobalCredential } from './context/CredentialContext'
 import { ToastProvider } from './components/Toast'
 import backend from './lib/backend'
@@ -85,7 +85,7 @@ function WindowTitleSync() {
   useEffect(() => {
     const current = navItems.find(item => item.to === location.pathname)
     const title = current ? `NetTools — ${current.label}` : 'NetTools'
-    void backend.WindowSetTitle?.(title)
+    WindowSetTitle(title)
   }, [location.pathname])
 
   return null

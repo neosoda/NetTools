@@ -1,0 +1,1 @@
+# Keeps frontend/dist present so `go test ./...` can compile `//go:embed all:frontend/dist` on fresh checkouts.
