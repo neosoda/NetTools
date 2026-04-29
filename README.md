@@ -6,7 +6,7 @@
 
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
-[![GitHub release](https://img.shields.io/github/v/release/neosoda/NetTools?color=blue&label=Version&logo=github)](../../releases)
+[![GitHub release](https://img.shields.io/badge/Version-1.3.2-blue?logo=github)](../../releases)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
 [![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -73,13 +73,16 @@
 </td>
 <td width="50%">
 
-### 🔄 Comparateur de Configuration
-- **Diff ligne par ligne** avec indicateurs +/-
+### 🔄 Comparateur de Configuration _(v1.3.2)_
+- **Vue Split** avec scroll synchronisé
+- Diff **sémantique** : détecte changements vs insertions
+- Code couleur : 🟢 insertion · 🔴 suppression · 🟡 modification
+- **Diff only** : masque les lignes inchangées
+- Toggle Split/Unifié pour vue alignée
+- Stats enrichies : +/−/~/= lignes
 - Ignorer des patterns (regex)
 - Comparaison entre deux backups
 - Export **HTML** standalone
-- Thème sombre et responsive
-- Partageable sans dépendances
 
 </td>
 </tr>
@@ -123,13 +126,30 @@
 </td>
 <td width="50%">
 
-### 📝 Journaux & Inventaire
-- Événements cliquables
-- Modal de détail avec contexte
+### 📝 Journaux & Inventaire _(v1.3.2)_
+- **Inventaire stateless** : vide à chaque lancement
+- Import/Export JSON explicites (boutons ↑↓)
+- Événements cliquables avec contexte modal
 - Lecteur de fichiers `.log` mensuels
-- Gestion CRUD équipements
-- Test de connexion SSH
-- Auto-rafraîchissement
+- Gestion CRUD équipements + test SSH
+- Nettoyage rapide (Eraser) avec confirmation
+
+</td>
+</tr>
+
+<tr>
+<td width="50%">
+
+### 🔐 Gestion des Credentials _(v1.3.2)_
+- **Auto-activation** : nouveau credential complet = automatiquement actif
+- Badge **ACTIF** dans la liste des credentials
+- Support multi-protocoles : SSH, password, SNMP v2c/v3
+- Chiffrement DPAPI (Windows) ou AES-256-GCM
+- Suppression du credential actif = réinitialisation propre
+- Édition et rotation simplifiées
+
+</td>
+<td width="50%">
 
 </td>
 </tr>
@@ -195,9 +215,9 @@
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.3.1](../../releases/download/v1.3.1/NetTools.exe)
+### [⬇️ Télécharger NetTools v1.3.2](../../releases/download/v1.3.2/NetTools.exe)
 
-**Windows 10/11 • 64-bit • ~21 MB**
+**Windows 10/11 • 64-bit • ~20 MB**
 
 </div>
 
