@@ -6,6 +6,39 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.3.2] - 2026-04-29
+
+### Ajouts
+- **Inventaire stateless** : aucune persistance implicite, import/export JSON explicites
+- **Auto-activation des credentials** : nouveau credential complet activé automatiquement
+- **Badge "ACTIF"** visible dans la liste des credentials (Paramètres)
+- **Vue Split refonte** dans le comparateur : scroll synchronisé côte à côte
+
+### Changements
+- **Diff sémantique** : appariement delete+insert → ligne `changed` (ambre)
+- **Code couleur enrichi** : 🟢 insertion · 🔴 suppression · 🟡 modification · gris neutre
+- **Filtre "Diff only"** : masque les lignes inchangées dans les deux modes
+- **Toggle Split/Unifié** dans la barre d'options du comparateur
+- **Stats diff enrichies** : +ajouts / −suppressions / ~modifiés / =inchangés
+- Suppression du credential actif : réinitialisation propre de la sélection
+
+### Corrigé
+- Nettoyage approprié du credential actif lors de la suppression
+
+---
+
+## [1.3.1] - 2026-04-15
+
+### Ajouts
+- **Terminal SSH persistant** dans les backups et playbooks
+- **Smart Syntax Agent** : auto-correction intelligente des commandes (ex: `vlan database`)
+- Support **AlliedWare Plus** avec syntaxe adaptée
+
+### Changements
+- Amélioration de la fiabilité du socle avant audit
+
+---
+
 ## [1.3.0] - 2026-03-31
 
 ### Ajouts
