@@ -50,10 +50,6 @@ export function ExportInventoryJSON() {
   return window['go']['main']['App']['ExportInventoryJSON']();
 }
 
-export function ImportInventoryJSON() {
-  return window['go']['main']['App']['ImportInventoryJSON']();
-}
-
 export function ExportScanToExcel(arg1) {
   return window['go']['main']['App']['ExportScanToExcel'](arg1);
 }
@@ -120,6 +116,10 @@ export function GetSettings() {
 
 export function GetTopology() {
   return window['go']['main']['App']['GetTopology']();
+}
+
+export function ImportInventoryJSON() {
+  return window['go']['main']['App']['ImportInventoryJSON']();
 }
 
 export function RunAudit(arg1) {

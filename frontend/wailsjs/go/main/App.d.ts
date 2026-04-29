@@ -32,8 +32,6 @@ export function ExportDiffHTML(arg1:main.DiffRequest,arg2:string,arg3:string):Pr
 
 export function ExportInventoryJSON():Promise<void>;
 
-export function ImportInventoryJSON():Promise<number>;
-
 export function ExportScanToExcel(arg1:Array<string>):Promise<string>;
 
 export function GetAllBackups():Promise<Array<models.Backup>>;
@@ -67,6 +65,8 @@ export function GetScheduledJobs():Promise<Array<models.ScheduledJob>>;
 export function GetSettings():Promise<main.AppSettings>;
 
 export function GetTopology():Promise<topology.Graph>;
+
+export function ImportInventoryJSON():Promise<number>;
 
 export function RunAudit(arg1:Array<string>):Promise<Array<audit.AuditReport>>;
 
