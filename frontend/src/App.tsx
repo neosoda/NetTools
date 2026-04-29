@@ -167,7 +167,7 @@ function AppContent() {
               </button>
             )}
             {stopStatus && <p className="text-xs text-center text-emerald-400 font-medium animate-in fade-in slide-in-from-bottom-2">{stopStatus}</p>}
-            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600 text-center">Version 1.3.0</p>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600 text-center">Version 1.3.2</p>
           </div>
         </div>
       </nav>
