@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Edit, Plug, RefreshCw, Eraser } from 'lucide-react'
+import { Plus, Trash2, Edit, Plug, RefreshCw, Eraser, Download, Upload } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -69,6 +69,26 @@ export default function InventoryPage() {
     },
   })
 
+  const handleExport = async () => {
+    try {
+      await backend.ExportInventoryJSON()
+    } catch (e: any) {
+      toast('Erreur export: ' + e, 'error')
+    }
+  }
+
+  const handleImport = async () => {
+    try {
+      const count = await backend.ImportInventoryJSON()
+      if (count > 0) {
+        qc.invalidateQueries({ queryKey: ['devices'] })
+        toast(`${count} équipements importés`, 'success')
+      }
+    } catch (e: any) {
+      toast('Erreur import: ' + e, 'error')
+    }
+  }
+
   const handleTest = async (deviceId: string) => {
     setTesting(deviceId)
     const result = await backend.TestDeviceConnection(deviceId)
@@ -98,6 +118,12 @@ export default function InventoryPage() {
               onChange={e => setSearch(e.target.value)}
               className="w-48 py-1.5"
             />
+            <Button variant="ghost" onClick={handleImport} title="Importer inventaire (JSON)">
+              <Upload className="w-4 h-4 text-blue-400" />
+            </Button>
+            <Button variant="ghost" onClick={handleExport} title="Exporter inventaire (JSON)" disabled={(devices as Device[]).length === 0}>
+              <Download className="w-4 h-4 text-emerald-400" />
+            </Button>
             {!confirmClear ? (
               <Button variant="ghost" onClick={() => setConfirmClear(true)} title="Vider l'inventaire">
                 <Eraser className="w-4 h-4 text-red-400" />

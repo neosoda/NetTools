@@ -30,6 +30,10 @@ export function ExportBackupsZip(arg1:Array<string>):Promise<string>;
 
 export function ExportDiffHTML(arg1:main.DiffRequest,arg2:string,arg3:string):Promise<string>;
 
+export function ExportInventoryJSON():Promise<void>;
+
+export function ImportInventoryJSON():Promise<number>;
+
 export function ExportScanToExcel(arg1:Array<string>):Promise<string>;
 
 export function GetAllBackups():Promise<Array<models.Backup>>;
