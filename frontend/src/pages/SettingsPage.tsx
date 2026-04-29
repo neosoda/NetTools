@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Save } from 'lucide-react'
+import { Save, CheckCircle } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -8,9 +8,11 @@ import Select from '../components/Select'
 import Modal from '../components/Modal'
 import backend from '../lib/backend'
 import { useToast } from '../components/Toast'
+import { useGlobalCredential } from '../context/CredentialContext'
 
 export default function SettingsPage() {
   const { toast } = useToast()
+  const { globalCredId, setGlobalCredId } = useGlobalCredential()
   const [settings, setSettings] = useState<any>(null)
   const [showCredModal, setShowCredModal] = useState(false)
   const [editCred, setEditCred] = useState<any>(null)
@@ -29,11 +31,24 @@ export default function SettingsPage() {
   })
   const saveCredMutation = useMutation({
     mutationFn: (cred: any) => backend.SaveCredential(cred),
-    onSuccess: () => { refetchCreds(); setShowCredModal(false) },
+    onSuccess: (result: any, variables: any) => {
+      refetchCreds()
+      setShowCredModal(false)
+      // Auto-activate only for new credentials that have at least one auth method
+      const isNew = !variables.id
+      if (isNew && result?.id && (result.has_password || result.has_private_key || result.has_snmp_community)) {
+        setGlobalCredId(result.id)
+        toast(`Credential "${result.name}" activé automatiquement`, 'success')
+      }
+    },
   })
   const deleteCredMutation = useMutation({
     mutationFn: (id: string) => backend.DeleteCredential(id),
-    onSuccess: () => refetchCreds(),
+    onSuccess: (_: any, deletedId: string) => {
+      refetchCreds()
+      // Clear active credential if it was deleted
+      if (globalCredId === deletedId) setGlobalCredId('')
+    },
   })
 
   const themeOpts = [{ value: 'dark', label: 'Sombre' }, { value: 'light', label: 'Clair' }]
@@ -86,8 +101,17 @@ export default function SettingsPage() {
               </tr></thead>
               <tbody className="divide-y divide-white/[0.02]">
                 {(credentials as any[]).map((c: any) => (
-                  <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-5 font-bold text-slate-200 tracking-wide">{c.name}</td>
+                  <tr key={c.id} className={`hover:bg-white/[0.02] transition-colors ${globalCredId === c.id ? 'bg-blue-600/5' : ''}`}>
+                    <td className="py-3 px-5 font-bold text-slate-200 tracking-wide">
+                      <div className="flex items-center gap-2">
+                        {c.name}
+                        {globalCredId === c.id && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-blue-400 bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.5 rounded">
+                            <CheckCircle className="w-3 h-3" /> ACTIF
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-5 text-slate-400 font-mono text-xs">{c.username || '—'}</td>
                     <td className="py-3 px-5 text-[11px] font-medium tracking-wide">
                       <div className="flex gap-2">

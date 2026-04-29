@@ -105,6 +105,15 @@ func (a *App) startup(ctx context.Context) {
 	})
 	a.sched.Start(ctx)
 
+	// Inventory is stateless – clear all devices on every launch
+	if db.Ready() {
+		if err := db.DB.Where("1 = 1").Delete(&models.Device{}).Error; err != nil {
+			logger.Error("failed to reset inventory on startup", err)
+		} else {
+			logger.Info("Inventaire réinitialisé (mode stateless)")
+		}
+	}
+
 	// Clean old logs based on retention setting
 	a.cleanOldLogs()
 
@@ -205,6 +214,63 @@ func (a *App) ClearInventory() error {
 	}
 	logger.AuditAction(a.ctx, "clear_inventory", "device", "all", "", "success", 0)
 	return nil
+}
+
+// ExportInventoryJSON opens a save dialog and writes the current inventory as JSON.
+func (a *App) ExportInventoryJSON() error {
+	var devices []models.Device
+	if err := db.DB.Order("hostname, ip").Find(&devices).Error; err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(devices, "", "  ")
+	if err != nil {
+		return err
+	}
+	savePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Exporter l'inventaire",
+		DefaultFilename: "inventaire.json",
+		Filters:         []runtime.FileFilter{{DisplayName: "JSON", Pattern: "*.json"}},
+	})
+	if err != nil || savePath == "" {
+		return nil
+	}
+	return os.WriteFile(savePath, data, 0644)
+}
+
+// ImportInventoryJSON opens an open dialog, reads a JSON file and replaces the inventory.
+func (a *App) ImportInventoryJSON() (int, error) {
+	openPath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:   "Importer un inventaire",
+		Filters: []runtime.FileFilter{{DisplayName: "JSON", Pattern: "*.json"}},
+	})
+	if err != nil || openPath == "" {
+		return 0, nil
+	}
+	data, err := os.ReadFile(openPath)
+	if err != nil {
+		return 0, fmt.Errorf("lecture du fichier: %w", err)
+	}
+	var devices []models.Device
+	if err := json.Unmarshal(data, &devices); err != nil {
+		return 0, fmt.Errorf("format JSON invalide: %w", err)
+	}
+	// Replace current inventory
+	if err := db.DB.Where("1 = 1").Delete(&models.Device{}).Error; err != nil {
+		return 0, err
+	}
+	imported := 0
+	for i := range devices {
+		if devices[i].ID == "" {
+			devices[i].ID = uuid.NewString()
+		}
+		if err := db.DB.Create(&devices[i]).Error; err != nil {
+			logger.Error("import device error", err)
+			continue
+		}
+		imported++
+	}
+	logger.AuditAction(a.ctx, "inventory_imported", "device", "all", openPath, "success", 0)
+	return imported, nil
 }
 
 // GetDevicesByIPs returns devices matching a list of IP addresses
