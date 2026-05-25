@@ -511,33 +511,9 @@ hr {{
   @page {{
     margin: 18mm 16mm 20mm;
     size: A4;
-
-    @top-center {{
-      content: "NetTools — Notice d'utilisation";
-      font-family: 'Inter', sans-serif;
-      font-size: 7.5pt;
-      color: #94a3b8;
-    }}
-
-    @bottom-right {{
-      content: counter(page);
-      font-family: 'Inter', sans-serif;
-      font-size: 7.5pt;
-      color: #94a3b8;
-    }}
-
-    @bottom-left {{
-      content: "NetTools · Administration réseau";
-      font-family: 'Inter', sans-serif;
-      font-size: 7pt;
-      color: #94a3b8;
-    }}
   }}
 
   @page :first {{
-    @top-center   {{ content: none; }}
-    @bottom-right {{ content: none; }}
-    @bottom-left  {{ content: none; }}
     margin: 0;
   }}
 
