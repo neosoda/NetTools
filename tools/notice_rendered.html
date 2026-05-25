@@ -643,7 +643,8 @@ Planificateur   robfig/cron v3
 └── logs\
     └── nettools-YYYY-MM.log   Journaux mensuels
 </code></pre>
-<div class="callout callout-warn"><p><strong>Important :</strong> l'inventaire des équipements est <strong>réinitialisé à chaque lancement</strong>. Pour conserver une liste d'équipements entre deux sessions, utiliser l'<strong>export JSON</strong> puis l'<strong>import JSON</strong> depuis la page Inventaire.</p>
+<div class="callout callout-warn">
+<p><strong>Important :</strong> l'inventaire des équipements est <strong>réinitialisé à chaque lancement</strong>. Pour conserver une liste d'équipements entre deux sessions, utiliser l'<strong>export JSON</strong> puis l'<strong>import JSON</strong> depuis la page Inventaire.</p>
 </div>
 <hr />
 <h2 id="2-installation-et-premier-lancement">2. Installation et premier lancement</h2>
@@ -849,26 +850,26 @@ Planificateur   robfig/cron v3
 <h3 id="modes-de-scan">Modes de scan</h3>
 <h4 id="mode-switches-rapide">Mode Switches (rapide)</h4>
 <p>Cible automatiquement les IPs <code>.1</code> à <code>.95</code> et <code>.254</code> d'un sous-réseau <code>/24</code>. Adapté à une infrastructure où les switchs occupent des IPs basses.</p>
-<pre><code>Préfixe réseau : 10.113.76
-→ Scanne 10.113.76.1 à 10.113.76.95 + 10.113.76.254
+<pre><code>Préfixe réseau : 10.0.1
+→ Scanne 10.0.1.1 à 10.0.1.95 + 10.0.1.254
 </code></pre>
 <h4 id="mode-complet-24">Mode Complet (/24)</h4>
 <p>Scanne les 254 IPs d'un sous-réseau <code>/24</code>.</p>
-<pre><code>Préfixe réseau : 10.113.76
-→ Scanne 10.113.76.1 à 10.113.76.254
+<pre><code>Préfixe réseau : 10.0.1
+→ Scanne 10.0.1.1 à 10.0.1.254
 </code></pre>
 <h4 id="mode-cidr-personnalise">Mode CIDR (personnalisé)</h4>
 <p>Permet n'importe quelle plage CIDR.</p>
 <pre><code>Exemples :
-10.113.76.0/24   → 254 IPs
+10.0.1.0/24   → 254 IPs
 10.0.0.0/22      → 1022 IPs
 192.168.1.100/32 → 1 IP
 </code></pre>
 <h4 id="liste-dips-manuelle">Liste d'IPs manuelle</h4>
 <p>Saisir les IPs directement, séparées par des virgules, espaces ou retours à la ligne.</p>
-<pre><code>10.113.76.10, 10.113.76.11
-10.113.76.20
-10.113.77.1
+<pre><code>10.0.1.10, 10.0.1.11
+10.0.1.20
+10.0.2.1
 </code></pre>
 <h3 id="parametres-de-scan">Paramètres de scan</h3>
 <table>
@@ -882,8 +883,8 @@ Planificateur   robfig/cron v3
 <tbody>
 <tr>
 <td>Communauté SNMP</td>
-<td>TICE</td>
-<td>Vérifier avec l'équipe réseau</td>
+<td>public</td>
+<td>Vérifier avec l'équipe réseau votre communauté réelle</td>
 </tr>
 <tr>
 <td>Timeout par IP</td>
@@ -989,7 +990,7 @@ Planificateur   robfig/cron v3
 <tr>
 <td>Adresse IP</td>
 <td>✓</td>
-<td><code>10.113.76.10</code></td>
+<td><code>10.0.1.10</code></td>
 </tr>
 <tr>
 <td>Hostname</td>
@@ -1303,11 +1304,11 @@ Sévérité : Élevé
 </code></pre>
 <h3 id="pattern-and-multi-bloc">Pattern AND (multi-bloc)</h3>
 <p>Pour vérifier que <strong>plusieurs éléments sont présents ensemble</strong>, utiliser <code>AND</code> :</p>
-<pre><code>ntp server 10.113.10.1 AND ntp authenticate
+<pre><code>ntp server 10.0.10.1 AND ntp authenticate
 </code></pre>
 <p>→ Passe seulement si les deux chaînes sont présentes dans la config.</p>
 <h3 id="regles-predefinies">Règles prédéfinies</h3>
-<p>22 règles sont incluses, adaptées à l'environnement Aruba/HPE :</p>
+<p>22 règles sont incluses, personnalisables selon votre environnement :</p>
 <table>
 <thead>
 <tr>
@@ -1318,31 +1319,31 @@ Sévérité : Élevé
 <tbody>
 <tr>
 <td>Sécurité</td>
-<td>Chiffrement passwords, désactivation HTTP/DHCP/Telnet, suppression compte <code>manager</code></td>
+<td>Chiffrement passwords, désactivation HTTP/DHCP/Telnet, gestion des comptes</td>
 </tr>
 <tr>
 <td>SSH</td>
-<td>Service SSH activé, restriction aux utilisateurs autorisés</td>
+<td>Service SSH activé, restriction aux utilisateurs autorisés, clés publiques</td>
 </tr>
 <tr>
 <td>Journalisation</td>
-<td>Facility <code>local0</code>, serveur syslog <code>10.113.x.x</code></td>
+<td>Facility syslog, serveur de logs centralisé, timestamps précis</td>
 </tr>
 <tr>
 <td>Heure</td>
-<td>Timezone Paris, NTP <code>ntp.lor.numerique-educatif.fr</code></td>
+<td>Timezone configurée, NTP synchronisé avec serveur externe</td>
 </tr>
 <tr>
 <td>SNMP</td>
-<td>Communauté <code>TICE</code>, AAA/Radius</td>
+<td>Communauté sécurisée configurée, AAA/Radius activé si applicable</td>
 </tr>
 <tr>
 <td>L2</td>
-<td>RSTP, LLDP, loop-protection, multicast routing, private VLAN 999</td>
+<td>RSTP, LLDP, loop-protection, gestion du multicast, VLANs privés</td>
 </tr>
 <tr>
 <td>VLANs</td>
-<td>1 (Administratif), 401 (PEDAGO), 502 (DMZ-PRIV), 504 (DMZ-PEDAGO), 517 (SERVEURS-PEDA)</td>
+<td>Segmentation réseau, isolation, documentation des VLANs critiques</td>
 </tr>
 </tbody>
 </table>
@@ -1541,7 +1542,7 @@ show running-config
 </ol>
 <h3 id="terminal-temps-reel">Terminal temps réel</h3>
 <p>Pendant l'exécution, un terminal affiche en direct :</p>
-<pre><code>── SW-SALLE-A (10.113.76.10) — équipement 1/3 ──
+<pre><code>── SW-SALLE-A (10.0.1.10) — équipement 1/3 ──
 
 [1/3] Version du système
       $ show version
@@ -1570,7 +1571,7 @@ show running-config
 <h3 id="resume-final">Résumé final</h3>
 <p>Après l'exécution, un résumé apparaît :</p>
 <pre><code>2/3 équipements OK
-✗ 10.113.76.11 — connexion refusée
+✗ 10.0.1.11 — connexion refusée
 </code></pre>
 <hr />
 <h2 id="11-planificateur-de-taches">11. Planificateur de tâches</h2>
@@ -1675,7 +1676,7 @@ show running-config
 
 // Scan
 {
-  &quot;cidr&quot;: &quot;10.113.76.0/24&quot;,
+  &quot;cidr&quot;: &quot;10.0.1.0/24&quot;,
   &quot;credential_id&quot;: &quot;cred-uuid&quot;
 }
 
@@ -1918,15 +1919,15 @@ Audit échoué
 <h3 id="workflow-1-audit-hebdomadaire-automatise">Workflow 1 : Audit hebdomadaire automatisé</h3>
 <p><strong>Objectif :</strong> Auditer tous les switchs chaque semaine et recevoir un rapport.</p>
 <pre><code>1. Paramètres
-   → Créer credential &quot;admin-rge&quot; (SSH + SNMP communauté TICE)
+   → Créer credential &quot;admin-switches&quot; (SSH + SNMP communauté sécurisée)
 
 2. Scan réseau
-   → Mode Switches, préfixe 10.113.76
-   → Communauté TICE, timeout 3s, 10 workers
+   → Mode Switches, plage IP 10.0.0.0/24 (adapter selon votre topologie)
+   → Communauté SNMP configurée, timeout 3s, 10 workers
    → Vérifier les équipements découverts
 
 3. Inventaire
-   → Assigner le credential &quot;admin-rge&quot; à tous les équipements
+   → Assigner le credential &quot;admin-switches&quot; à tous les équipements
    → Compléter les localisations
 
 4. Planificateur → Nouvelle tâche
@@ -1954,7 +1955,7 @@ Audit échoué
    timeout: 60s
    steps:
      - name: Configurer NTP
-       command: ntp server 10.113.10.1
+       command: ntp server 10.0.10.1
      - name: Vérifier NTP
        command: show ntp status
        expect: Clock is synchronized
@@ -2012,7 +2013,7 @@ Audit échoué
 <h3 id="formats-de-fichiers-backup">Formats de fichiers backup</h3>
 <p>Les fichiers de backup sont sauvegardés avec la convention de nommage :</p>
 <pre><code>{IP}_{CONFIG_TYPE}_{TIMESTAMP}.txt
-Exemple : 10.113.76.10_running_20251114_083045.txt
+Exemple : 10.0.1.10_running_20251114_083045.txt
 </code></pre>
 <p>Ils contiennent la configuration brute telle que renvoyée par l'équipement, sans artefacts de session.</p>
 <h3 id="format-yaml-des-playbooks">Format YAML des playbooks</h3>
@@ -2165,7 +2166,7 @@ steps:
 </code></pre>
 <h3 id="problemes-snmp">Problèmes SNMP</h3>
 <p><strong>Symptôme :</strong> Scan ne trouve aucun équipement</p>
-<pre><code>→ Vérifier la communauté SNMP (défaut: TICE)
+<pre><code>→ Vérifier la communauté SNMP (doit correspondre à la configuration des équipements)
 → Vérifier que le port UDP/161 est accessible (firewall/ACL)
 → Tester avec &quot;Diagnostic IP individuel&quot; sur une IP connue
 → Augmenter le timeout (3s → 5s sur liaison WAN)
@@ -2208,7 +2209,7 @@ steps:
 <p>Les logs détaillés sont dans <code>%APPDATA%\NetTools\logs\nettools-YYYY-MM.log</code>.</p>
 <p>Format JSON structuré, consultable directement dans l'application (Journaux → Fichiers journaux) ou avec un éditeur texte.</p>
 <hr />
-<p><em>NetTools — NetTools — Administration réseau</em>
+<p><em>NetTools — Plateforme de gestion réseau et audit de conformité</em>
 <em>Stack : Wails v2 · Go · React · SQLite · zerolog</em></p>
 </div>
 
