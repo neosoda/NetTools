@@ -13,7 +13,7 @@ import markdown
 BASE_DIR = Path(__file__).parent.parent
 NOTICE_MD = BASE_DIR / "NOTICE.md"
 OUTPUT_HTML = BASE_DIR / "tools" / "notice_rendered.html"
-OUTPUT_PDF = BASE_DIR / "NOTICE_NetTools.pdf"
+OUTPUT_PDF = BASE_DIR / "NOTICE_NetworkTools.pdf"
 
 
 def md_to_html(text: str) -> str:

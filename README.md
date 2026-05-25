@@ -224,7 +224,7 @@
 ### Installation
 
 1. Téléchargez `NetTools.exe` depuis la [page Releases](../../releases)
-2. Exécutez l'installateur (ou double-cliquez)
+2. Double-cliquez sur l'exécutable
 3. L'application crée automatiquement ses dossiers de données dans :
    ```
    %APPDATA%\NetTools\
@@ -234,11 +234,12 @@
    └── settings.json            (Préférences utilisateur)
    ```
 
+L'inventaire est **stateless** : il repart vide à chaque lancement. Utilisez les boutons d'**export/import JSON** de la page Inventaire si vous voulez conserver une liste d'équipements entre deux sessions.
+
 ### Prérequis
 
 - **Windows 10/11** (64-bit)
 - **WebView2 Runtime** (inclus dans Windows 11, [télécharger pour W10](https://developer.microsoft.com/en-us/microsoft-edge/webview2))
-- **.NET Framework 4.7+** (recommandé)
 
 ---
 
@@ -274,9 +275,16 @@ Comparateur → Sélectionner 2 backups → Configurer filtres → Exporter HTML
 
 | Document | Description |
 |----------|-------------|
-| [NOTICE.md](./NOTICE.md) | Guide utilisateur complet + règles d'audit |
+| [NOTICE.md](./NOTICE.md) | Source de la notice utilisateur complète |
+| [tools/notice_rendered.html](./tools/notice_rendered.html) | Rendu HTML de la notice prêt à relire dans un navigateur |
 | [go.mod](./go.mod) | Dépendances Go |
 | [Architecture](#architecture) | Structure du projet |
+
+Pour régénérer les notices après modification :
+
+```bash
+python tools/generate_notice_pdf.py
+```
 
 ### Supports Multi-Vendor
 
@@ -335,7 +343,7 @@ nettools/
 
 ### Prérequis
 
-- **Go 1.21+**
+- **Go 1.24+**
 - **Node.js 18+**
 - **Wails CLI v2** : `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 - **Git**

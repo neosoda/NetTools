@@ -61,7 +61,7 @@ L'application est un **unique fichier `.exe`** embarquant à la fois le frontend
 
 ### Données stockées
 
-Tout est conservé dans `%APPDATA%\NetTools\` :
+Les paramètres, backups et journaux sont conservés dans `%APPDATA%\NetTools\` :
 
 ```
 %APPDATA%\NetTools\
@@ -71,6 +71,8 @@ Tout est conservé dans `%APPDATA%\NetTools\` :
 └── logs\
     └── nettools-YYYY-MM.log   Journaux mensuels
 ```
+
+> **Important :** l'inventaire des équipements est **réinitialisé à chaque lancement**. Pour conserver une liste d'équipements entre deux sessions, utiliser l'**export JSON** puis l'**import JSON** depuis la page Inventaire.
 
 ---
 
@@ -87,7 +89,7 @@ Tout est conservé dans `%APPDATA%\NetTools\` :
 
 ### Installation
 
-1. Copier `Nettools_claude.exe` dans le dossier de votre choix
+1. Copier `NetTools.exe` dans le dossier de votre choix
 2. Double-cliquer pour lancer — aucune installation requise
 3. Au premier lancement, Windows Defender peut afficher un avertissement : cliquer sur **Informations complémentaires → Exécuter quand même**
 
@@ -166,7 +168,9 @@ Cliquer sur **Ajouter** (icône `+`) puis remplir :
 
 ### Credential global
 
-Cliquer sur l'icône **étoile** ou **épingle** d'un credential pour le définir comme credential global. Il sera pré-sélectionné dans toutes les pages.
+Le **credential actif** se choisit depuis le sélecteur affiché en bas de la barre latérale gauche. Il est utilisé par défaut pour les pages Scan, Backups, Playbooks et toutes les opérations qui n'ont pas déjà un credential affecté équipement par équipement.
+
+Lorsqu'un **nouveau credential** est créé avec au moins une méthode d'authentification exploitable (mot de passe SSH, clé privée ou communauté SNMP), il devient automatiquement le credential actif. Le badge **ACTIF** dans la liste permet de repérer immédiatement celui qui est en cours d'utilisation.
 
 ### Modifier un credential
 
@@ -271,7 +275,7 @@ Le champ **Tester une IP** permet de tester la connectivité SNMP d'une seule ad
 
 > **Page :** Inventaire
 
-L'inventaire est la base de données centrale de tous les équipements connus. Les scans SNMP y ajoutent automatiquement les équipements découverts.
+L'inventaire est la base de travail de la session en cours. Les scans SNMP y ajoutent automatiquement les équipements découverts, mais la liste est **vidée à chaque redémarrage** de l'application.
 
 ### Tableau des équipements
 
@@ -300,6 +304,13 @@ Cliquer l'icône **crayon** pour éditer les informations. Le credential assign�
 L'icône **prise électrique** lance un test de connexion SSH sur l'équipement. Un toast vert confirme le succès, rouge indique l'erreur avec le message exact.
 
 > **Conseil :** Tester la connexion après avoir assigné un credential pour valider la configuration avant un backup.
+
+### Importer / exporter l'inventaire
+
+- **Exporter inventaire (JSON)** : enregistre l'état courant de la liste des équipements dans un fichier JSON.
+- **Importer inventaire (JSON)** : recharge un fichier JSON et **remplace** l'inventaire courant.
+
+> **Conseil :** utiliser l'export JSON à la fin d'une session si vous souhaitez retrouver rapidement la même base d'équipements au prochain lancement.
 
 ### Vider l'inventaire
 
