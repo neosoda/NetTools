@@ -6,6 +6,20 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.4.1] - 2026-07-26
+
+### Sécurité
+- Mise à jour des dépendances Go signalées par Dependabot
+- Migration vers React 19 et React Router 8 pour supprimer les alertes npm
+- Compilation imposée avec Go 1.26.5 afin d'intégrer les correctifs de sécurité de la bibliothèque standard
+- Mise à jour de `golang.org/x/text` vers la version corrigée
+
+### Changements
+- Prérequis de développement alignés sur Go 1.26.5 et Node.js 22.22
+- Résolution TypeScript modernisée pour les exports de modules utilisés par Vite
+
+---
+
 ## [1.4.0] - 2026-07-26
 
 ### Ajouts
