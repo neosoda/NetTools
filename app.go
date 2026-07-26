@@ -419,6 +419,30 @@ func (a *App) SaveCredential(input CredentialInput) (*models.CredentialView, err
 		}
 	}
 
+	if strings.EqualFold(strings.TrimSpace(cred.SNMPVersion), "v3") {
+		v3params := snmp.ScanParams{
+			Version:   "v3",
+			Username:  cred.SNMPUsername,
+			AuthProto: cred.SNMPAuthProtocol,
+			PrivProto: cred.SNMPPrivProtocol,
+		}
+		if len(cred.SNMPAuthEnc) > 0 {
+			v3params.AuthKey, err = a.secretMgr.Decrypt(cred.SNMPAuthEnc)
+			if err != nil {
+				return nil, fmt.Errorf("decrypt snmp auth key: %w", err)
+			}
+		}
+		if len(cred.SNMPPrivEnc) > 0 {
+			v3params.PrivKey, err = a.secretMgr.Decrypt(cred.SNMPPrivEnc)
+			if err != nil {
+				return nil, fmt.Errorf("decrypt snmp priv key: %w", err)
+			}
+		}
+		if err := snmp.ValidateV3Security(v3params); err != nil {
+			return nil, fmt.Errorf("invalid SNMPv3 credential: %w", err)
+		}
+	}
+
 	if err := db.DB.Save(&cred).Error; err != nil {
 		return nil, err
 	}
@@ -470,15 +494,46 @@ func (a *App) getCredentials(credentialID string) (username, password, privateKe
 	return
 }
 
-func (a *App) getSNMPCommunity(credentialID string) (string, error) {
+func (a *App) getSNMPParams(credentialID string) (snmp.ScanParams, error) {
+	params := snmp.ScanParams{
+		Community: "public",
+		Version:   "v2c",
+	}
+	if credentialID == "" {
+		return params, nil
+	}
+
 	var cred models.Credential
 	if err := db.DB.First(&cred, "id = ?", credentialID).Error; err != nil {
-		return "", err
+		return params, err
 	}
-	if len(cred.SNMPCommunityEnc) == 0 {
-		return "public", nil
+	if strings.TrimSpace(cred.SNMPVersion) != "" {
+		params.Version = strings.ToLower(strings.TrimSpace(cred.SNMPVersion))
 	}
-	return a.secretMgr.Decrypt(cred.SNMPCommunityEnc)
+	params.Username = cred.SNMPUsername
+	params.AuthProto = cred.SNMPAuthProtocol
+	params.PrivProto = cred.SNMPPrivProtocol
+
+	var err error
+	if len(cred.SNMPCommunityEnc) > 0 {
+		params.Community, err = a.secretMgr.Decrypt(cred.SNMPCommunityEnc)
+		if err != nil {
+			return params, fmt.Errorf("decrypt snmp community: %w", err)
+		}
+	}
+	if len(cred.SNMPAuthEnc) > 0 {
+		params.AuthKey, err = a.secretMgr.Decrypt(cred.SNMPAuthEnc)
+		if err != nil {
+			return params, fmt.Errorf("decrypt snmp auth key: %w", err)
+		}
+	}
+	if len(cred.SNMPPrivEnc) > 0 {
+		params.PrivKey, err = a.secretMgr.Decrypt(cred.SNMPPrivEnc)
+		if err != nil {
+			return params, fmt.Errorf("decrypt snmp priv key: %w", err)
+		}
+	}
+	return params, nil
 }
 
 // ─────────────────────────────────────────────
@@ -496,18 +551,14 @@ type ScanRequest struct {
 }
 
 func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
-	community := "public"
-	version := "v2c"
-
-	// Priority: explicit community > credential > default
-	if req.Community != "" {
-		community = req.Community
-	} else if req.CredentialID != "" {
-		comm, err := a.getSNMPCommunity(req.CredentialID)
-		if err == nil {
-			community = comm
-		}
+	params, err := a.getSNMPParams(req.CredentialID)
+	if err != nil {
+		return nil, fmt.Errorf("load SNMP credential: %w", err)
 	}
+	if req.Community != "" && params.Version != "v3" {
+		params.Community = req.Community
+	}
+	version := params.Version
 
 	// Validate inputs
 	if req.CIDR != "" {
@@ -555,15 +606,11 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 		timeoutSec = 3
 	}
 
-	params := snmp.ScanParams{
-		CIDR:      req.CIDR,
-		IPs:       req.IPList,
-		Community: community,
-		Version:   version,
-		Workers:   workers,
-		Timeout:   time.Duration(timeoutSec) * time.Second,
-		RateDelay: 50 * time.Millisecond,
-	}
+	params.CIDR = req.CIDR
+	params.IPs = req.IPList
+	params.Workers = workers
+	params.Timeout = time.Duration(timeoutSec) * time.Second
+	params.RateDelay = 50 * time.Millisecond
 
 	start := time.Now()
 	results, err := snmp.Scan(ctx, params, func(ip string, done, total int) {
@@ -667,7 +714,25 @@ func (a *App) TestSNMPHost(ip, community, version string, timeoutSec int) SNMPTe
 	if timeoutSec <= 0 {
 		timeoutSec = 5
 	}
-	r := snmp.ProbeIPWithFallback(ip, 161, community, timeoutSec, snmp.ScanParams{})
+	r := snmp.ProbeIPWithFallback(ip, 161, community, timeoutSec, snmp.ScanParams{Version: version})
+	return makeSNMPTestResult(r)
+}
+
+// TestSNMPHostWithCredential tests one host with the complete SNMP
+// configuration stored in an encrypted credential.
+func (a *App) TestSNMPHostWithCredential(ip, credentialID string, timeoutSec int) SNMPTestResult {
+	params, err := a.getSNMPParams(credentialID)
+	if err != nil {
+		return SNMPTestResult{IP: ip, Error: fmt.Sprintf("load SNMP credential: %v", err)}
+	}
+	if timeoutSec <= 0 {
+		timeoutSec = 5
+	}
+	r := snmp.ProbeIPWithFallback(ip, 161, params.Community, timeoutSec, params)
+	return makeSNMPTestResult(r)
+}
+
+func makeSNMPTestResult(r snmp.ScanResult) SNMPTestResult {
 	errStr := ""
 	if r.Error != nil {
 		errStr = r.Error.Error()
@@ -1641,13 +1706,15 @@ func (a *App) CollectLLDP() error {
 		go func() {
 			defer wg.Done()
 			for dev := range jobs {
-				community := "public"
-				if dev.CredentialID != "" {
-					if c, err := a.getSNMPCommunity(dev.CredentialID); err == nil {
-						community = c
-					}
+				params, err := a.getSNMPParams(dev.CredentialID)
+				if err != nil {
+					results <- deviceLinks{deviceID: dev.ID, links: nil}
+					continue
 				}
-				links, err := snmp.CollectLLDPNeighbors(dev.IP, uint16(dev.SNMPPort), community, dev.SNMPVersion, snmp.ScanParams{})
+				if dev.CredentialID == "" && dev.SNMPVersion != "" {
+					params.Version = dev.SNMPVersion
+				}
+				links, err := snmp.CollectLLDPNeighbors(dev.IP, uint16(dev.SNMPPort), params.Community, params.Version, params)
 				if err != nil || len(links) == 0 {
 					results <- deviceLinks{deviceID: dev.ID, links: nil}
 					continue

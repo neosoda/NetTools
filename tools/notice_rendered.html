@@ -515,7 +515,7 @@ hr {
   <div class="cover-subtitle">Notice d'utilisation complète</div>
   <div class="cover-badges">
     <span class="badge">Wails v2</span>
-    <span class="badge">Go 1.25+</span>
+    <span class="badge">Go 1.24+</span>
     <span class="badge">React 18</span>
     <span class="badge">SQLite</span>
     <span class="badge">SSH multi-vendor</span>
@@ -523,7 +523,7 @@ hr {
   </div>
   <div class="cover-meta">
     <span>NetTools — Administration réseau</span>
-    <span>Version 2025</span>
+    <span>Version 1.4.0</span>
     <span>Usage interne</span>
   </div>
 </div>
@@ -781,40 +781,44 @@ Planificateur   robfig/cron v3
 <tbody>
 <tr>
 <td>Version SNMP</td>
-<td><code>v2c</code> (communauté) ou <code>v3</code> (authentifié)</td>
+<td><code>v2c</code> (communauté) ou <code>v3</code> (USM)</td>
 </tr>
 <tr>
 <td>Communauté</td>
-<td>Pour v2c (ex: <code>TICE</code>, <code>public</code>)</td>
+<td>Pour v1/v2c (ex: <code>public</code>)</td>
 </tr>
 <tr>
 <td>Utilisateur v3</td>
 <td>Pour SNMPv3 uniquement</td>
 </tr>
 <tr>
-<td>Auth Protocol</td>
-<td>SHA ou MD5</td>
+<td>Niveau de sécurité USM</td>
+<td><code>noAuthNoPriv</code>, <code>authNoPriv</code> ou <code>authPriv</code></td>
 </tr>
 <tr>
-<td>Auth Key</td>
-<td>Clé d'authentification v3</td>
+<td>Protocole d'authentification</td>
+<td>MD5, SHA-1, SHA-224, SHA-256, SHA-384 ou SHA-512</td>
 </tr>
 <tr>
-<td>Privacy Protocol</td>
-<td>AES ou DES</td>
+<td>Phrase secrète d'authentification</td>
+<td>8 caractères minimum pour <code>authNoPriv</code> et <code>authPriv</code></td>
 </tr>
 <tr>
-<td>Privacy Key</td>
-<td>Clé de chiffrement v3</td>
+<td>Protocole de chiffrement</td>
+<td>DES ou AES-128/192/256</td>
+</tr>
+<tr>
+<td>Phrase secrète de chiffrement</td>
+<td>8 caractères minimum pour <code>authPriv</code></td>
 </tr>
 </tbody>
 </table>
 <div class="callout callout-tip">
-<p><strong>Conseil :</strong> Un même credential peut contenir à la fois des infos SSH et SNMP. Créer un credential <code>admin-global</code> avec les deux pour simplifier la configuration.</p>
+<p><strong>Conseil :</strong> Préférer <code>authPriv</code> avec SHA-256 et AES-128 lorsque les équipements le permettent. Un même credential peut contenir à la fois des informations SSH et SNMP.</p>
 </div>
 <h3 id="credential-global">Credential global</h3>
 <p>Le <strong>credential actif</strong> se choisit depuis le sélecteur affiché en bas de la barre latérale gauche. Il est utilisé par défaut pour les pages Scan, Backups, Playbooks et toutes les opérations qui n'ont pas déjà un credential affecté équipement par équipement.</p>
-<p>Lorsqu'un <strong>nouveau credential</strong> est créé avec au moins une méthode d'authentification exploitable (mot de passe SSH, clé privée ou communauté SNMP), il devient automatiquement le credential actif. Le badge <strong>ACTIF</strong> dans la liste permet de repérer immédiatement celui qui est en cours d'utilisation.</p>
+<p>Lorsqu'un <strong>nouveau credential</strong> est créé avec au moins une méthode d'authentification exploitable (mot de passe SSH, clé privée, communauté SNMP ou utilisateur SNMPv3), il devient automatiquement le credential actif. Le badge <strong>ACTIF</strong> dans la liste permet de repérer immédiatement celui qui est en cours d'utilisation.</p>
 <h3 id="modifier-un-credential">Modifier un credential</h3>
 <p>En cliquant Éditer, les champs de mots de passe affichent <code>(inchangé)</code> — laisser vide pour ne pas modifier la valeur chiffrée existante.</p>
 <hr />
@@ -860,7 +864,7 @@ Planificateur   robfig/cron v3
 <tr>
 <td>Communauté SNMP</td>
 <td>public</td>
-<td>Vérifier avec l'équipe réseau votre communauté réelle</td>
+<td>Utilisée uniquement sans credential ou avec SNMPv1/v2c</td>
 </tr>
 <tr>
 <td>Timeout par IP</td>
@@ -875,13 +879,14 @@ Planificateur   robfig/cron v3
 <tr>
 <td>Credential</td>
 <td>Global</td>
-<td>Sélectionner un credential v3 si v2c refusé</td>
+<td>Sélectionner le credential SNMPv2c ou SNMPv3 à utiliser</td>
 </tr>
 </tbody>
 </table>
 <div class="callout callout-warn">
 <p><strong>Attention :</strong> Trop de workers sur un réseau lent ou via VPN peut provoquer des timeouts. Commencer avec 10 workers.</p>
 </div>
+<p>Pour SNMPv3, le scanner, la collecte LLDP et le diagnostic ciblé utilisent tous le même credential USM chiffré. La communauté affichée dans la page Scan est alors désactivée.</p>
 <h3 id="lancement-et-suivi">Lancement et suivi</h3>
 <ol>
 <li>Configurer les paramètres</li>
@@ -941,7 +946,8 @@ Planificateur   robfig/cron v3
 - Feuille de résumé par fabricant</p>
 <h3 id="diagnostic-ip-individuel">Diagnostic IP individuel</h3>
 <p>Le champ <strong>Tester une IP</strong> permet de tester la connectivité SNMP d'une seule adresse :
-- Teste automatiquement v2c → v1 → communauté <code>public</code> en fallback
+- Utilise le credential global actif lorsqu'il est sélectionné, y compris en SNMPv3
+- Sans credential actif, teste automatiquement v2c puis v1
 - Retourne les OIDs bruts collectés
 - Utile pour diagnostiquer un équipement récalcitrant</p>
 <hr />
@@ -2142,7 +2148,9 @@ steps:
 </code></pre>
 <h3 id="problemes-snmp">Problèmes SNMP</h3>
 <p><strong>Symptôme :</strong> Scan ne trouve aucun équipement</p>
-<pre><code>→ Vérifier la communauté SNMP (doit correspondre à la configuration des équipements)
+<pre><code>→ En v1/v2c, vérifier la communauté SNMP
+→ En v3, vérifier l'utilisateur, le niveau USM, les protocoles et les phrases secrètes
+→ Les phrases secrètes SNMPv3 doivent contenir au moins 8 caractères
 → Vérifier que le port UDP/161 est accessible (firewall/ACL)
 → Tester avec &quot;Diagnostic IP individuel&quot; sur une IP connue
 → Augmenter le timeout (3s → 5s sur liaison WAN)

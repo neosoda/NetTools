@@ -83,7 +83,7 @@ export default function ScanPage() {
       const discovered = await callBackend(() => m.ScanNetwork({
         cidr: scanCidr,
         ip_list: ipList,
-        community: community.trim() || 'public',
+        community: globalCredId ? '' : (community.trim() || 'public'),
         credential_id: globalCredId,
         workers: safeWorkers,
         timeout_sec: parseInt(timeout),
@@ -113,8 +113,12 @@ export default function ScanPage() {
     setTestResult(null)
     try {
       const m = await getBackend()
-      const r = await callBackend(() => m.TestSNMPHost(testIp.trim(), community.trim() || 'public', 'v2c', parseInt(timeout)))
+      const r = globalCredId
+        ? await callBackend(() => m.TestSNMPHostWithCredential(testIp.trim(), globalCredId, parseInt(timeout)))
+        : await callBackend(() => m.TestSNMPHost(testIp.trim(), community.trim() || 'public', 'v2c', parseInt(timeout)))
       setTestResult(r)
+    } catch (e: any) {
+      setTestResult({ reachable: false, error: e?.message || String(e) })
     } finally {
       setTesting(false)
     }
@@ -184,7 +188,8 @@ export default function ScanPage() {
                 <p className="text-[11px] font-medium text-slate-500 mt-1.5 ml-1">{scanModeDesc[scanMode]}</p>
               </div>
             )}
-            <Input label="Communauté SNMP" value={community} onChange={e => setCommunity(e.target.value)}
+            <Input label={globalCredId ? 'Communauté gérée par le credential' : 'Communauté SNMP'} type="password"
+              value={community} onChange={e => setCommunity(e.target.value)} disabled={!!globalCredId}
               placeholder="public" className="w-full" />
             <Input label="Timeout (s)" type="number" min="1" max="30"
               value={timeout} onChange={e => setTimeoutVal(e.target.value)} className="w-full" />

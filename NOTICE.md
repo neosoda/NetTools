@@ -156,21 +156,22 @@ Cliquer sur **Ajouter** (icône `+`) puis remplir :
 
 | Champ | Description |
 |-------|-------------|
-| Version SNMP | `v2c` (communauté) ou `v3` (authentifié) |
-| Communauté | Pour v2c (ex: `TICE`, `public`) |
+| Version SNMP | `v2c` (communauté) ou `v3` (USM) |
+| Communauté | Pour v1/v2c (ex: `public`) |
 | Utilisateur v3 | Pour SNMPv3 uniquement |
-| Auth Protocol | SHA ou MD5 |
-| Auth Key | Clé d'authentification v3 |
-| Privacy Protocol | AES ou DES |
-| Privacy Key | Clé de chiffrement v3 |
+| Niveau de sécurité USM | `noAuthNoPriv`, `authNoPriv` ou `authPriv` |
+| Protocole d'authentification | MD5, SHA-1, SHA-224, SHA-256, SHA-384 ou SHA-512 |
+| Phrase secrète d'authentification | 8 caractères minimum pour `authNoPriv` et `authPriv` |
+| Protocole de chiffrement | DES ou AES-128/192/256 |
+| Phrase secrète de chiffrement | 8 caractères minimum pour `authPriv` |
 
-> **Conseil :** Un même credential peut contenir à la fois des infos SSH et SNMP. Créer un credential `admin-global` avec les deux pour simplifier la configuration.
+> **Conseil :** Préférer `authPriv` avec SHA-256 et AES-128 lorsque les équipements le permettent. Un même credential peut contenir à la fois des informations SSH et SNMP.
 
 ### Credential global
 
 Le **credential actif** se choisit depuis le sélecteur affiché en bas de la barre latérale gauche. Il est utilisé par défaut pour les pages Scan, Backups, Playbooks et toutes les opérations qui n'ont pas déjà un credential affecté équipement par équipement.
 
-Lorsqu'un **nouveau credential** est créé avec au moins une méthode d'authentification exploitable (mot de passe SSH, clé privée ou communauté SNMP), il devient automatiquement le credential actif. Le badge **ACTIF** dans la liste permet de repérer immédiatement celui qui est en cours d'utilisation.
+Lorsqu'un **nouveau credential** est créé avec au moins une méthode d'authentification exploitable (mot de passe SSH, clé privée, communauté SNMP ou utilisateur SNMPv3), il devient automatiquement le credential actif. Le badge **ACTIF** dans la liste permet de repérer immédiatement celui qui est en cours d'utilisation.
 
 ### Modifier un credential
 
@@ -225,12 +226,14 @@ Saisir les IPs directement, séparées par des virgules, espaces ou retours à l
 
 | Paramètre | Défaut | Conseil |
 |-----------|--------|---------|
-| Communauté SNMP | public | Vérifier avec l'équipe réseau votre communauté réelle |
+| Communauté SNMP | public | Utilisée uniquement sans credential ou avec SNMPv1/v2c |
 | Timeout par IP | 3 s | Augmenter sur liens WAN lents |
 | Workers parallèles | 10 | Max 50 recommandé pour éviter la congestion |
-| Credential | Global | Sélectionner un credential v3 si v2c refusé |
+| Credential | Global | Sélectionner le credential SNMPv2c ou SNMPv3 à utiliser |
 
 > **Attention :** Trop de workers sur un réseau lent ou via VPN peut provoquer des timeouts. Commencer avec 10 workers.
+
+Pour SNMPv3, le scanner, la collecte LLDP et le diagnostic ciblé utilisent tous le même credential USM chiffré. La communauté affichée dans la page Scan est alors désactivée.
 
 ### Lancement et suivi
 
@@ -265,7 +268,8 @@ Cliquer **Exporter Excel** pour générer un fichier `.xlsx` avec :
 ### Diagnostic IP individuel
 
 Le champ **Tester une IP** permet de tester la connectivité SNMP d'une seule adresse :
-- Teste automatiquement v2c → v1 → communauté `public` en fallback
+- Utilise le credential global actif lorsqu'il est sélectionné, y compris en SNMPv3
+- Sans credential actif, teste automatiquement v2c puis v1
 - Retourne les OIDs bruts collectés
 - Utile pour diagnostiquer un équipement récalcitrant
 
@@ -1143,7 +1147,9 @@ Pour les développeurs étendant l'application, les événements Wails émis :
 
 **Symptôme :** Scan ne trouve aucun équipement
 ```
-→ Vérifier la communauté SNMP (doit correspondre à la configuration des équipements)
+→ En v1/v2c, vérifier la communauté SNMP
+→ En v3, vérifier l'utilisateur, le niveau USM, les protocoles et les phrases secrètes
+→ Les phrases secrètes SNMPv3 doivent contenir au moins 8 caractères
 → Vérifier que le port UDP/161 est accessible (firewall/ACL)
 → Tester avec "Diagnostic IP individuel" sur une IP connue
 → Augmenter le timeout (3s → 5s sur liaison WAN)

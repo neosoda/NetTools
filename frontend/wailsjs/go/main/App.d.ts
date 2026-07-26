@@ -102,4 +102,6 @@ export function TestDeviceConnection(arg1:string):Promise<Record<string, any>>;
 
 export function TestSNMPHost(arg1:string,arg2:string,arg3:string,arg4:number):Promise<main.SNMPTestResult>;
 
+export function TestSNMPHostWithCredential(arg1:string,arg2:string,arg3:number):Promise<main.SNMPTestResult>;
+
 export function ToggleScheduledJob(arg1:string,arg2:boolean):Promise<void>;

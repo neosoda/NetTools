@@ -11,6 +11,13 @@
     "name": "neosoda",
     "email": "neosoda@gmail.com"
   },
+  "info": {
+    "companyName": "neosoda",
+    "productName": "NetTools",
+    "productVersion": "1.4.0.0",
+    "copyright": "Copyright 2026 neosoda",
+    "comments": "Administration réseau et audit de conformité"
+  },
   "windows": {
     "icon": "build/appicon.ico"
   }
