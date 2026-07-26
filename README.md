@@ -226,9 +226,24 @@
 
 ### Installation
 
-1. Téléchargez `NetTools.exe` depuis la [page Releases](../../releases)
-2. Double-cliquez sur l'exécutable
-3. L'application crée automatiquement ses dossiers de données dans :
+1. Téléchargez `NetTools_v1.4.1.exe` depuis la [page Releases](../../releases)
+2. Vérifiez son empreinte SHA-256 :
+   ```powershell
+   Get-FileHash -Algorithm SHA256 .\NetTools_v1.4.1.exe
+   ```
+   Empreinte attendue pour la version 1.4.1 :
+   `BB365ABC7A9790C2E91D2F8C0517C368436CF43143C1AD7304FEDFA8B3270C49`
+3. Consultez le [rapport VirusTotal de la version 1.4.1](https://www.virustotal.com/gui/file/bb365abc7a9790c2e91d2f8c0517c368436cf43143c1ad7304fedfa8b3270c49).
+   Lors de la publication, 3 moteurs sur 70 classent le binaire comme malveillant,
+   tandis que le scan Microsoft Defender local ne détecte aucune menace. Ce résultat
+   peut correspondre à des faux positifs, mais ne constitue pas une garantie.
+4. Double-cliquez sur l'exécutable. Le binaire n'étant pas signé par une autorité
+   publique, SmartScreen peut afficher « Windows a protégé votre ordinateur ».
+   Si le fichier provient bien de cette page et que son empreinte correspond exactement,
+   cliquez sur **Informations complémentaires**, vérifiez que le nom du fichier est
+   `NetTools_v1.4.1.exe`, puis sur **Exécuter quand même** uniquement si vous acceptez
+   le risque signalé par l'analyse VirusTotal.
+5. L'application crée automatiquement ses dossiers de données dans :
    ```
    %APPDATA%\NetTools\
    ├── nettools.db          (Base de données SQLite)
