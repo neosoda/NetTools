@@ -541,7 +541,7 @@ hr {{
   <div class="cover-subtitle">Notice d'utilisation complète</div>
   <div class="cover-badges">
     <span class="badge">Wails v2</span>
-    <span class="badge">Go 1.25+</span>
+    <span class="badge">Go 1.24+</span>
     <span class="badge">React 18</span>
     <span class="badge">SQLite</span>
     <span class="badge">SSH multi-vendor</span>
@@ -549,7 +549,7 @@ hr {{
   </div>
   <div class="cover-meta">
     <span>NetTools — Administration réseau</span>
-    <span>Version 2025</span>
+    <span>Version 1.4.0</span>
     <span>Usage interne</span>
   </div>
 </div>

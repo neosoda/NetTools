@@ -6,7 +6,7 @@
 
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
-[![GitHub release](https://img.shields.io/badge/Version-1.3.2-blue?logo=github)](../../releases)
+[![GitHub release](https://img.shields.io/badge/Version-1.4.0-blue?logo=github)](../../releases)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
 [![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -38,7 +38,9 @@
 <td width="50%">
 
 ### 🔗 Découverte Réseau
-- Scan **SNMP v2c/v3** rapide et fiable
+- Scan **SNMP v1/v2c/v3 USM** rapide et fiable
+- Niveaux SNMPv3 : **noAuthNoPriv**, **authNoPriv**, **authPriv**
+- Authentification MD5, SHA-1 et SHA-2 ; chiffrement DES et AES-128/192/256
 - Saisie manuelle ou import d'IPs
 - Collecte automatique de métadonnées
 - Export **Excel** formaté et professionnel
@@ -140,10 +142,11 @@
 <tr>
 <td width="50%">
 
-### 🔐 Gestion des Credentials _(v1.3.2)_
+### 🔐 Gestion des Credentials _(v1.4.0)_
 - **Auto-activation** : nouveau credential complet = automatiquement actif
 - Badge **ACTIF** dans la liste des credentials
-- Support multi-protocoles : SSH, password, SNMP v2c/v3
+- Support multi-protocoles : SSH, password, SNMP v1/v2c/v3 USM
+- Secrets SNMPv3 chiffrés utilisés par le scan, LLDP et le diagnostic ciblé
 - Chiffrement DPAPI (Windows) ou AES-256-GCM
 - Suppression du credential actif = réinitialisation propre
 - Édition et rotation simplifiées
@@ -215,7 +218,7 @@
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.3.2](../../releases/download/v1.3.2/NetTools.exe)
+### [⬇️ Télécharger NetTools v1.4.0](../../releases/download/v1.4.0/NetTools_v1.4.0.exe)
 
 **Windows 10/11 • 64-bit • ~20 MB**
 

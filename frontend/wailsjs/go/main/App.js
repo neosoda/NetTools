@@ -190,6 +190,10 @@ export function TestSNMPHost(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['TestSNMPHost'](arg1, arg2, arg3, arg4);
 }
 
+export function TestSNMPHostWithCredential(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TestSNMPHostWithCredential'](arg1, arg2, arg3);
+}
+
 export function ToggleScheduledJob(arg1, arg2) {
   return window['go']['main']['App']['ToggleScheduledJob'](arg1, arg2);
 }

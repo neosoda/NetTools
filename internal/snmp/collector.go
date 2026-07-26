@@ -10,19 +10,25 @@ import (
 
 // DeviceInfo holds the collected device information
 type DeviceInfo struct {
-	IP           string
-	Hostname     string
-	Description  string
-	Location     string
-	Contact      string
-	ObjectID     string
-	UptimeMs     int64
-	Vendor       string
-	Model        string
+	IP          string
+	Hostname    string
+	Description string
+	Location    string
+	Contact     string
+	ObjectID    string
+	UptimeMs    int64
+	Vendor      string
+	Model       string
 }
 
 // CollectDeviceInfo performs SNMP GET to collect device metadata
 func CollectDeviceInfo(ip string, community string, version string, port uint16, timeout time.Duration) (*DeviceInfo, error) {
+	return CollectDeviceInfoWithSecurity(ip, community, version, port, timeout, ScanParams{})
+}
+
+// CollectDeviceInfoWithSecurity performs the metadata query with optional
+// SNMPv3 USM credentials.
+func CollectDeviceInfoWithSecurity(ip string, community string, version string, port uint16, timeout time.Duration, v3 ScanParams) (*DeviceInfo, error) {
 	if timeout == 0 {
 		timeout = 5 * time.Second
 	}
@@ -44,6 +50,12 @@ func CollectDeviceInfo(ip string, community string, version string, port uint16,
 		Version:   v,
 		Timeout:   timeout,
 		Retries:   2,
+	}
+
+	if v == gosnmp.Version3 {
+		if err := configureV3Security(g, v3); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := g.Connect(); err != nil {

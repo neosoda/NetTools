@@ -6,6 +6,28 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.4.0] - 2026-07-26
+
+### Ajouts
+- **SNMPv3 USM complet** avec les niveaux `noAuthNoPriv`, `authNoPriv` et `authPriv`
+- Authentification MD5, SHA-1, SHA-224, SHA-256, SHA-384 et SHA-512
+- Chiffrement DES, AES-128, AES-192 et AES-256, variantes Blumenthal et Reeder
+- Diagnostic SNMP ciblé utilisant le credential global actif
+- Tests unitaires de validation des niveaux et protocoles SNMPv3
+
+### Changements
+- Configuration USM centralisée pour le scan, la collecte de métadonnées et LLDP
+- Chargement systématique des secrets SNMPv3 chiffrés depuis le credential actif
+- Interface des credentials enrichie avec le choix explicite du niveau de sécurité
+- Validation du nom utilisateur et des phrases secrètes SNMPv3
+
+### Corrigé
+- Le scan et LLDP ne forcent plus systématiquement le niveau `authPriv`
+- Le collecteur SNMP configure désormais correctement les paramètres USM
+- Le diagnostic ciblé respecte maintenant la version SNMP demandée
+
+---
+
 ## [1.3.2] - 2026-04-29
 
 ### Ajouts

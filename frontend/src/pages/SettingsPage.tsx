@@ -36,7 +36,7 @@ export default function SettingsPage() {
       setShowCredModal(false)
       // Auto-activate only for new credentials that have at least one auth method
       const isNew = !variables.id
-      if (isNew && result?.id && (result.has_password || result.has_private_key || result.has_snmp_community)) {
+      if (isNew && result?.id && (result.has_password || result.has_private_key || result.has_snmp_community || result.snmp_version === 'v3')) {
         setGlobalCredId(result.id)
         toast(`Credential "${result.name}" activé automatiquement`, 'success')
       }
@@ -54,8 +54,43 @@ export default function SettingsPage() {
   const themeOpts = [{ value: 'dark', label: 'Sombre' }, { value: 'light', label: 'Clair' }]
   const langOpts = [{ value: 'fr', label: 'Français' }, { value: 'en', label: 'English' }]
   const snmpOpts = [{ value: 'v2c', label: 'SNMPv2c' }, { value: 'v3', label: 'SNMPv3' }]
-  const authOpts = [{ value: 'SHA', label: 'SHA' }, { value: 'MD5', label: 'MD5' }]
-  const privOpts = [{ value: 'AES', label: 'AES' }, { value: 'DES', label: 'DES' }]
+  const securityOpts = [
+    { value: 'authPriv', label: 'authPriv (authentification + chiffrement)' },
+    { value: 'authNoPriv', label: 'authNoPriv (authentification seule)' },
+    { value: 'noAuthNoPriv', label: 'noAuthNoPriv (utilisateur seul)' },
+  ]
+  const authOpts = [
+    { value: 'SHA256', label: 'SHA-256 (recommandé)' },
+    { value: 'SHA384', label: 'SHA-384' },
+    { value: 'SHA512', label: 'SHA-512' },
+    { value: 'SHA224', label: 'SHA-224' },
+    { value: 'SHA', label: 'SHA-1 (ancien)' },
+    { value: 'MD5', label: 'MD5 (ancien)' },
+  ]
+  const privOpts = [
+    { value: 'AES', label: 'AES-128 (recommandé)' },
+    { value: 'AES192C', label: 'AES-192 Reeder' },
+    { value: 'AES256C', label: 'AES-256 Reeder' },
+    { value: 'AES192', label: 'AES-192 Blumenthal' },
+    { value: 'AES256', label: 'AES-256 Blumenthal' },
+    { value: 'DES', label: 'DES (ancien)' },
+  ]
+
+  const securityLevel = !editCred?.snmp_auth_protocol || editCred.snmp_auth_protocol === 'NONE'
+    ? 'noAuthNoPriv'
+    : (!editCred?.snmp_priv_protocol || editCred.snmp_priv_protocol === 'NONE' ? 'authNoPriv' : 'authPriv')
+
+  const setSecurityLevel = (level: string) => {
+    setEditCred((current: any) => ({
+      ...current,
+      snmp_auth_protocol: level === 'noAuthNoPriv'
+        ? 'NONE'
+        : (current?.snmp_auth_protocol && current.snmp_auth_protocol !== 'NONE' ? current.snmp_auth_protocol : 'SHA256'),
+      snmp_priv_protocol: level === 'authPriv'
+        ? (current?.snmp_priv_protocol && current.snmp_priv_protocol !== 'NONE' ? current.snmp_priv_protocol : 'AES')
+        : 'NONE',
+    }))
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -91,7 +126,7 @@ export default function SettingsPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
               Credentials <span className="text-slate-500 ml-1">({(credentials as any[]).length})</span>
             </h2>
-            <Button size="sm" variant="primary" onClick={() => { setEditCred({ snmp_version: 'v2c', snmp_auth_protocol: 'SHA', snmp_priv_protocol: 'AES' }); setShowCredModal(true) }}>+ Nouveau Credential</Button>
+            <Button size="sm" variant="primary" onClick={() => { setEditCred({ snmp_version: 'v2c', snmp_auth_protocol: 'SHA256', snmp_priv_protocol: 'AES' }); setShowCredModal(true) }}>+ Nouveau Credential</Button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -157,17 +192,30 @@ export default function SettingsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4 pt-2">
             <Select label="Version SNMP" value={editCred?.snmp_version || 'v2c'} options={snmpOpts} onChange={e => setEditCred((c: any) => ({ ...c, snmp_version: e.target.value }))} />
-            <Input label="Communauté SNMP" type="password" value={editCred?.snmp_community || ''} placeholder={editCred?.has_snmp_community ? '•••••••• (inchangée)' : ''} onChange={e => setEditCred((c: any) => ({ ...c, snmp_community: e.target.value }))} />
+            {(editCred?.snmp_version || 'v2c') !== 'v3' && (
+              <Input label="Communauté SNMP" type="password" value={editCred?.snmp_community || ''} placeholder={editCred?.has_snmp_community ? '•••••••• (inchangée)' : ''} onChange={e => setEditCred((c: any) => ({ ...c, snmp_community: e.target.value }))} />
+            )}
           </div>
           {(editCred?.snmp_version || 'v2c') === 'v3' && (
             <div className="bg-slate-950/30 p-4 rounded-xl border border-white/[0.02] grid grid-cols-2 gap-4 mt-2">
               <div className="col-span-2">
-                <Input label="Utilisateur SNMPv3" value={editCred?.snmp_username || ''} onChange={e => setEditCred((c: any) => ({ ...c, snmp_username: e.target.value }))} />
+                <Input label="Utilisateur SNMPv3 *" value={editCred?.snmp_username || ''} required onChange={e => setEditCred((c: any) => ({ ...c, snmp_username: e.target.value }))} />
               </div>
-              <Select label="Protocole d'Auth" value={editCred?.snmp_auth_protocol || 'SHA'} options={authOpts} onChange={e => setEditCred((c: any) => ({ ...c, snmp_auth_protocol: e.target.value }))} />
-              <Input label="Clé d'Auth" type="password" value={editCred?.snmp_auth_key || ''} onChange={e => setEditCred((c: any) => ({ ...c, snmp_auth_key: e.target.value }))} />
-              <Select label="Protocole Priv" value={editCred?.snmp_priv_protocol || 'AES'} options={privOpts} onChange={e => setEditCred((c: any) => ({ ...c, snmp_priv_protocol: e.target.value }))} />
-              <Input label="Clé Priv" type="password" value={editCred?.snmp_priv_key || ''} onChange={e => setEditCred((c: any) => ({ ...c, snmp_priv_key: e.target.value }))} />
+              <div className="col-span-2">
+                <Select label="Niveau de sécurité USM" value={securityLevel} options={securityOpts} onChange={e => setSecurityLevel(e.target.value)} />
+              </div>
+              {securityLevel !== 'noAuthNoPriv' && (
+                <>
+                  <Select label="Protocole d'authentification" value={editCred?.snmp_auth_protocol || 'SHA256'} options={authOpts} onChange={e => setEditCred((c: any) => ({ ...c, snmp_auth_protocol: e.target.value }))} />
+                  <Input label="Phrase secrète d'authentification" type="password" minLength={8} value={editCred?.snmp_auth_key || ''} placeholder={editCred?.id ? 'Laisser vide pour conserver' : '8 caractères minimum'} onChange={e => setEditCred((c: any) => ({ ...c, snmp_auth_key: e.target.value }))} />
+                </>
+              )}
+              {securityLevel === 'authPriv' && (
+                <>
+                  <Select label="Protocole de chiffrement" value={editCred?.snmp_priv_protocol || 'AES'} options={privOpts} onChange={e => setEditCred((c: any) => ({ ...c, snmp_priv_protocol: e.target.value }))} />
+                  <Input label="Phrase secrète de chiffrement" type="password" minLength={8} value={editCred?.snmp_priv_key || ''} placeholder={editCred?.id ? 'Laisser vide pour conserver' : '8 caractères minimum'} onChange={e => setEditCred((c: any) => ({ ...c, snmp_priv_key: e.target.value }))} />
+                </>
+              )}
             </div>
           )}
           <div className="flex justify-end gap-3 pt-4 border-t border-white/[0.04]">

@@ -24,8 +24,8 @@ type RawLLDPLink struct {
 
 // LLDP-MIB OID prefixes (IEEE 802.1AB)
 const (
-	lldpRemTableBase  = "1.0.8802.1.1.2.1.4.1.1" // lldpRemTable entries
-	lldpLocPortBase   = "1.0.8802.1.1.2.1.3.7.1"  // lldpLocPortTable entries
+	lldpRemTableBase = "1.0.8802.1.1.2.1.4.1.1" // lldpRemTable entries
+	lldpLocPortBase  = "1.0.8802.1.1.2.1.3.7.1" // lldpLocPortTable entries
 )
 
 // lldpRemField OID suffixes within lldpRemTable
@@ -70,14 +70,8 @@ func CollectLLDPNeighbors(ip string, port uint16, community string, version stri
 	}
 
 	if snmpVersion == gosnmp.Version3 {
-		g.SecurityModel = gosnmp.UserSecurityModel
-		g.MsgFlags = gosnmp.AuthPriv
-		g.SecurityParameters = &gosnmp.UsmSecurityParameters{
-			UserName:                 v3.Username,
-			AuthenticationProtocol:   parseAuthProto(v3.AuthProto),
-			AuthenticationPassphrase: v3.AuthKey,
-			PrivacyProtocol:          parsePrivProto(v3.PrivProto),
-			PrivacyPassphrase:        v3.PrivKey,
+		if err := configureV3Security(g, v3); err != nil {
+			return nil, err
 		}
 	}
 

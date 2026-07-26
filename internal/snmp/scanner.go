@@ -14,28 +14,28 @@ import (
 
 // ScanParams defines the parameters for a network scan
 type ScanParams struct {
-	CIDR        string
-	IPs         []string      // explicit IP list (alternative to CIDR)
-	Community   string
-	Version     string // "v2c" | "v3"
-	Port        uint16
-	Timeout     time.Duration
-	Workers     int
-	RateDelay   time.Duration // delay between probes per worker (rate limiting)
+	CIDR      string
+	IPs       []string // explicit IP list (alternative to CIDR)
+	Community string
+	Version   string // "v2c" | "v3"
+	Port      uint16
+	Timeout   time.Duration
+	Workers   int
+	RateDelay time.Duration // delay between probes per worker (rate limiting)
 	// SNMPv3 fields
-	Username    string
-	AuthProto   string
-	AuthKey     string
-	PrivProto   string
-	PrivKey     string
+	Username  string
+	AuthProto string
+	AuthKey   string
+	PrivProto string
+	PrivKey   string
 }
 
 // ScanResult holds the result for one IP
 type ScanResult struct {
-	IP       string
+	IP        string
 	Reachable bool
-	Data     map[string]string // OID name -> value
-	Error    error
+	Data      map[string]string // OID name -> value
+	Error     error
 }
 
 // DefaultOIDs are the standard OIDs to collect during a scan
@@ -60,6 +60,12 @@ var oidNames = map[string]string{
 }
 
 func Scan(ctx context.Context, params ScanParams, progressCb func(ip string, done, total int)) ([]ScanResult, error) {
+	if strings.EqualFold(strings.TrimSpace(params.Version), "v3") {
+		if err := ValidateV3Security(params); err != nil {
+			return nil, err
+		}
+	}
+
 	var ips []string
 	var err error
 
@@ -153,14 +159,8 @@ func snmpAttempt(ip string, port uint16, community string, version gosnmp.SnmpVe
 	}
 
 	if version == gosnmp.Version3 {
-		g.SecurityModel = gosnmp.UserSecurityModel
-		g.MsgFlags = gosnmp.AuthPriv
-		g.SecurityParameters = &gosnmp.UsmSecurityParameters{
-			UserName:                 params.Username,
-			AuthenticationProtocol:   parseAuthProto(params.AuthProto),
-			AuthenticationPassphrase: params.AuthKey,
-			PrivacyProtocol:          parsePrivProto(params.PrivProto),
-			PrivacyPassphrase:        params.PrivKey,
+		if err := configureV3Security(g, params); err != nil {
+			return nil, err
 		}
 	}
 
@@ -253,12 +253,20 @@ func ProbeIPWithFallback(ip string, port uint16, community string, timeoutSec in
 		version   gosnmp.SnmpVersion
 		label     string
 	}
-	attempts := []attempt{
-		{community, gosnmp.Version2c, "v2c"},
-		{community, gosnmp.Version1, "v1"},
-	}
-	if community != "public" {
-		attempts = append(attempts, attempt{"public", gosnmp.Version1, "v1-public"})
+	var attempts []attempt
+	switch strings.ToLower(strings.TrimSpace(v3params.Version)) {
+	case "v3", "3":
+		attempts = []attempt{{community, gosnmp.Version3, "v3"}}
+	case "v1", "1":
+		attempts = []attempt{{community, gosnmp.Version1, "v1"}}
+	default:
+		attempts = []attempt{
+			{community, gosnmp.Version2c, "v2c"},
+			{community, gosnmp.Version1, "v1"},
+		}
+		if community != "public" {
+			attempts = append(attempts, attempt{"public", gosnmp.Version1, "v1-public"})
+		}
 	}
 
 	var lastErr error
@@ -284,28 +292,6 @@ func formatMAC(b []byte) string {
 		return fmt.Sprintf("%x", b)
 	}
 	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4], b[5])
-}
-
-func parseAuthProto(proto string) gosnmp.SnmpV3AuthProtocol {
-	switch proto {
-	case "SHA":
-		return gosnmp.SHA
-	case "MD5":
-		return gosnmp.MD5
-	default:
-		return gosnmp.SHA
-	}
-}
-
-func parsePrivProto(proto string) gosnmp.SnmpV3PrivProtocol {
-	switch proto {
-	case "AES":
-		return gosnmp.AES
-	case "DES":
-		return gosnmp.DES
-	default:
-		return gosnmp.AES
-	}
 }
 
 func cidrToIPs(cidr string) ([]string, error) {
