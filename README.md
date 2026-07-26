@@ -6,10 +6,10 @@
 
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
-[![GitHub release](https://img.shields.io/badge/Version-1.4.0-blue?logo=github)](../../releases)
+[![GitHub release](https://img.shields.io/badge/Version-1.4.1-blue?logo=github)](../../releases)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
-[![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](https://golang.org)
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 
 [Télécharger](#-téléchargement) • [Documentation](#-documentation) • [Fonctionnalités](#-fonctionnalités) • [Contribution](#-contribution)
@@ -168,7 +168,7 @@
 ├─────────────────────────────────────────────┤
 │                                             │
 │  ┌──────────────────────────────────────┐  │
-│  │  Frontend (React 18 + TypeScript)    │  │
+│  │  Frontend (React 19 + TypeScript)    │  │
 │  │  • TailwindCSS                       │  │
 │  │  • React Router                      │  │
 │  │  • React Query                       │  │
@@ -182,7 +182,7 @@
 │  └──────────────────────────────────────┘  │
 │                   ↕️                        │
 │  ┌──────────────────────────────────────┐  │
-│  │  Backend (Go 1.24)                   │  │
+│  │  Backend (Go 1.26.5)                 │  │
 │  │  • SNMP (gosnmp)                     │  │
 │  │  • SSH (x/crypto/ssh)                │  │
 │  │  • SQLite + GORM                     │  │
@@ -201,9 +201,9 @@
 
 | Composant | Technologie | Rôle |
 |-----------|------------|------|
-| **Frontend** | React 18 + TypeScript | Interface moderne et réactive |
+| **Frontend** | React 19 + TypeScript | Interface moderne et réactive |
 | **Desktop** | Wails v2 | Framework de distribution |
-| **Backend** | Go 1.24 | Logique métier et communications |
+| **Backend** | Go 1.26.5 | Logique métier et communications |
 | **Database** | SQLite + GORM | Persistance des données |
 | **Réseau** | gosnmp, x/crypto/ssh | SNMP et SSH |
 | **UI Framework** | TailwindCSS | Design responsive |
@@ -218,7 +218,7 @@
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.4.0](../../releases/download/v1.4.0/NetTools_v1.4.0.exe)
+### [⬇️ Télécharger NetTools v1.4.1](../../releases/download/v1.4.1/NetTools_v1.4.1.exe)
 
 **Windows 10/11 • 64-bit • ~20 MB**
 
@@ -346,8 +346,8 @@ nettools/
 
 ### Prérequis
 
-- **Go 1.24+**
-- **Node.js 18+**
+- **Go 1.26.5+**
+- **Node.js 22.22+**
 - **Wails CLI v2** : `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 - **Git**
 

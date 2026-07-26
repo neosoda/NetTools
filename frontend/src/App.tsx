@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { Routes, Route, NavLink, useLocation } from 'react-router'
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -167,7 +167,7 @@ function AppContent() {
               </button>
             )}
             {stopStatus && <p className="text-xs text-center text-emerald-400 font-medium animate-in fade-in slide-in-from-bottom-2">{stopStatus}</p>}
-            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600 text-center">Version 1.4.0</p>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600 text-center">Version 1.4.1</p>
           </div>
         </div>
       </nav>
