@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NetTools — Notice d’utilisation</title>
+  <meta name="description" content="Notice d’utilisation NetTools : installation, credentials, inventaire, scan SNMP, sauvegardes SSH, audits, diff, playbooks, planification et dépannage." />
+  <style>
+    :root {
+      --bg: #08111f;
+      --bg-2: #0c1728;
+      --panel: rgba(255,255,255,.075);
+      --panel-2: rgba(255,255,255,.11);
+      --line: rgba(255,255,255,.15);
+      --text: #eef6ff;
+      --muted: #9fb2c8;
+      --soft: #c8d8ea;
+      --brand: #62e6d4;
+      --brand-2: #8aa8ff;
+      --warn: #ffd166;
+      --danger: #ff7b8a;
+      --ok: #65e6a3;
+      --shadow: 0 26px 90px rgba(0,0,0,.36);
+      --radius: 24px;
+      --radius-sm: 16px;
+      --max: 1220px;
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f8fc;
+      --bg-2: #eef4fb;
+      --panel: rgba(255,255,255,.85);
+      --panel-2: rgba(255,255,255,.95);
+      --line: rgba(20,38,62,.13);
+      --text: #102033;
+      --muted: #5a6f88;
+      --soft: #23364d;
+      --brand: #027a72;
+      --brand-2: #4e66e8;
+      --warn: #9b6500;
+      --danger: #b93246;
+      --ok: #087b46;
+      --shadow: 0 24px 70px rgba(32,53,78,.16);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(98,230,212,.20), transparent 34%),
+        radial-gradient(circle at 82% 0%, rgba(138,168,255,.24), transparent 32%),
+        radial-gradient(circle at 65% 70%, rgba(98,230,212,.10), transparent 35%),
+        linear-gradient(135deg, var(--bg), var(--bg-2));
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    code, pre { font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace; }
+    ::selection { background: rgba(98,230,212,.28); }
+
+    .page-progress {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 3px;
+      width: 100%;
+      z-index: 50;
+      background: linear-gradient(90deg, var(--brand), var(--brand-2));
+      transform-origin: 0 50%;
+      transform: scaleX(0);
+    }
+
+    .shell {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 14px;
+      z-index: 20;
+      backdrop-filter: blur(18px);
+      background: rgba(8,17,31,.68);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 12px 10px 18px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.18);
+    }
+
+    [data-theme="light"] .topbar { background: rgba(245,248,252,.76); }
+
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 210px;
+    }
+
+    .logo {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background:
+        linear-gradient(135deg, rgba(98,230,212,.98), rgba(138,168,255,.88));
+      box-shadow: 0 12px 28px rgba(98,230,212,.20);
+      color: #06101f;
+      font-weight: 900;
+      letter-spacing: -.04em;
+    }
+
+    .brand-title { font-size: 14px; font-weight: 800; letter-spacing: -.02em; }
+    .brand-subtitle { font-size: 12px; color: var(--muted); margin-top: -2px; }
+
+    .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .button {
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: var(--panel);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 750;
+      cursor: pointer;
+      transition: transform .2s ease, background .2s ease, border-color .2s ease;
+    }
+    .button:hover { transform: translateY(-1px); background: var(--panel-2); border-color: rgba(98,230,212,.42); }
+    .button.primary { background: linear-gradient(135deg, rgba(98,230,212,.95), rgba(138,168,255,.92)); color: #06101f; border: 0; }
+
+    .hero {
+      margin-top: 38px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr);
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .hero-card, .quick-card, .doc-section, .mini-card, .step-card, .notice-card {
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-card {
+      padding: clamp(28px, 5vw, 58px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      width: 360px;
+      height: 360px;
+      right: -140px;
+      bottom: -160px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(98,230,212,.28), transparent 62%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(98,230,212,.10);
+      border: 1px solid rgba(98,230,212,.24);
+      color: var(--brand);
+      font-weight: 800;
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      font-size: clamp(42px, 7vw, 82px);
+      line-height: .9;
+      letter-spacing: -.07em;
+      margin: 0 0 20px;
+      max-width: 760px;
+    }
+
+    .lead {
+      color: var(--soft);
+      font-size: clamp(17px, 2vw, 20px);
+      max-width: 700px;
+      margin: 0 0 26px;
+    }
+
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 10px;
+      margin-top: 26px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .meta-item {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.055);
+      border: 1px solid var(--line);
+    }
+    .meta-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .10em; font-weight: 850; }
+    .meta-value { margin-top: 4px; font-weight: 850; }
+
+    .quick-card { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+    .quick-title { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    .quick-title h2 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
+    .status-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--ok); box-shadow: 0 0 0 6px rgba(101,230,163,.12); }
+
+    .searchbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      border-radius: 18px;
+      padding: 12px 14px;
+    }
+    .searchbox input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      color: var(--text);
+      background: transparent;
+      font: inherit;
+      font-size: 14px;
+    }
+    .searchbox input::placeholder { color: var(--muted); }
+
+    .quick-list { display: grid; gap: 8px; }
+    .quick-list a {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 13px;
+      border-radius: 16px;
+      color: var(--soft);
+      border: 1px solid transparent;
+      transition: background .2s ease, color .2s ease, border-color .2s ease;
+    }
+    .quick-list a:hover, .quick-list a.active { background: rgba(98,230,212,.10); color: var(--text); border-color: rgba(98,230,212,.18); }
+    .quick-list span { color: var(--muted); font-size: 12px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+      gap: 22px;
+      margin-top: 22px;
+      align-items: start;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 96px;
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+      max-height: calc(100vh - 120px);
+      overflow: auto;
+    }
+    .sidebar h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin: 4px 10px 12px; }
+    .nav { display: grid; gap: 4px; }
+    .nav a {
+      padding: 10px 12px;
+      border-radius: 14px;
+      color: var(--soft);
+      font-weight: 700;
+      font-size: 13px;
+      transition: .2s ease;
+    }
+    .nav a:hover, .nav a.active { color: var(--text); background: rgba(138,168,255,.13); }
+
+    main { display: grid; gap: 18px; }
+    .doc-section { padding: clamp(22px, 3vw, 34px); scroll-margin-top: 110px; }
+    .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+    .section-index {
+      min-width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      background: rgba(98,230,212,.12);
+      border: 1px solid rgba(98,230,212,.18);
+      color: var(--brand);
+      font-weight: 900;
+    }
+    h2 { margin: 0; font-size: clamp(24px, 3vw, 36px); letter-spacing: -.045em; line-height: 1.05; }
+    h3 { margin: 22px 0 10px; font-size: 18px; letter-spacing: -.02em; }
+    p { color: var(--soft); margin: 0 0 12px; }
+    ul, ol { margin: 10px 0 0 0; padding-left: 20px; color: var(--soft); }
+    li { margin: 6px 0; }
+    strong { color: var(--text); }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .mini-card, .step-card, .notice-card { padding: 16px; box-shadow: none; }
+    .mini-card h3, .step-card h3, .notice-card h3 { margin-top: 0; }
+    .mini-card p:last-child, .notice-card p:last-child { margin-bottom: 0; }
+
+    .callout {
+      border: 1px solid rgba(98,230,212,.22);
+      background: rgba(98,230,212,.085);
+      border-radius: 20px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .callout.warning { border-color: rgba(255,209,102,.28); background: rgba(255,209,102,.10); }
+    .callout.danger { border-color: rgba(255,123,138,.28); background: rgba(255,123,138,.10); }
+    .callout p:last-child { margin-bottom: 0; }
+
+    .table-wrap { overflow: auto; border-radius: 18px; border: 1px solid var(--line); margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; min-width: 640px; background: rgba(255,255,255,.04); }
+    th, td { padding: 14px 15px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--text); font-size: 12px; text-transform: uppercase; letter-spacing: .10em; background: rgba(255,255,255,.06); }
+    td { color: var(--soft); }
+    tr:last-child td { border-bottom: 0; }
+
+    .steps { counter-reset: step; display: grid; gap: 10px; margin-top: 12px; }
+    .step-card { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: start; }
+    .step-card::before {
+      counter-increment: step;
+      content: counter(step);
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, rgba(98,230,212,.95), rgba(138,168,255,.92));
+      color: #06101f;
+      font-weight: 950;
+    }
+    .step-card h3 { margin: 0 0 4px; font-size: 16px; }
+    .step-card p { margin: 0; }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.055);
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.045);
+      border-radius: 18px;
+      padding: 14px 16px;
+      margin-top: 10px;
+    }
+    summary { cursor: pointer; font-weight: 850; color: var(--text); }
+    details p, details ul, details ol { margin-top: 12px; }
+
+    .code-block {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(0,0,0,.26);
+      overflow: hidden;
+      margin-top: 14px;
+    }
+    [data-theme="light"] .code-block { background: rgba(10,24,42,.06); }
+    .code-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .10em;
+    }
+    pre { margin: 0; padding: 16px; overflow: auto; color: var(--soft); font-size: 13px; }
+    .copy-btn { font-size: 12px; padding: 7px 10px; }
+
+    .module-card {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px;
+      background: rgba(255,255,255,.045);
+    }
+    .module-card h3 { margin: 0 0 8px; }
+    .module-card .path { color: var(--brand); font-weight: 850; font-size: 13px; margin-bottom: 10px; }
+
+    .footer {
+      padding: 34px 0 50px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .hidden-by-search { display: none !important; }
+    .no-results { display: none; padding: 18px; border-radius: 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
+    .no-results.show { display: block; }
+
+    @media (max-width: 980px) {
+      .hero, .layout { grid-template-columns: 1fr; }
+      .sidebar { position: relative; top: 0; max-height: none; }
+      .meta-grid, .grid-3 { grid-template-columns: 1fr; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 680px) {
+      .shell { padding: 16px; }
+      .topbar { border-radius: 22px; align-items: flex-start; flex-direction: column; position: relative; top: 0; }
+      .top-actions { justify-content: flex-start; }
+      .hero-card { padding: 28px; }
+      .meta-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 46px; }
+      .section-head { flex-direction: column; }
+    }
+
+    @media print {
+      body { background: #fff; color: #111827; }
+      .topbar, .sidebar, .page-progress, .hero-actions, .quick-card, .copy-btn { display: none !important; }
+      .shell { max-width: none; padding: 0; }
+      .hero, .layout { display: block; }
+      .hero-card, .doc-section, .mini-card, .step-card, .notice-card, .module-card, .callout, details, .code-block { box-shadow: none; background: #fff; border-color: #d7dee8; break-inside: avoid; }
+      .doc-section { margin: 18px 0; }
+      a { color: #111827; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-progress" id="pageProgress"></div>
+
+  <div class="shell">
+    <header class="topbar" aria-label="En-tête">
+      <a class="brand-lockup" href="#top" aria-label="Retour en haut de page">
+        <div class="logo">N</div>
+        <div>
+          <div class="brand-title">NetTools</div>
+          <div class="brand-subtitle">Notice d’utilisation</div>
+        </div>
+      </a>
+      <div class="top-actions">
+        <button class="button" id="themeToggle" type="button">Changer le thème</button>
+        <button class="button" onclick="window.print()" type="button">Imprimer</button>
+        <a class="button" href="Notice_Utilisation_NetTools_v1.3.2.pdf">PDF</a>
+        <a class="button primary" href="https://github.com/neosoda/NetTools" target="_blank" rel="noreferrer">Dépôt GitHub</a>
+      </div>
+    </header>
+
+    <section class="hero" id="top">
+      <div class="hero-card">
+        <div class="eyebrow">Version 1.3.2 · Avril 2026</div>
+        <h1>NetTools — Notice d’utilisation</h1>
+        <p class="lead">Cette notice explique comment installer NetTools, configurer les accès réseau, inventorier les équipements, lancer des scans SNMP, sauvegarder des configurations, auditer la conformité et automatiser les opérations récurrentes.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#demarrage">Commencer</a>
+          <a class="button" href="#procedures">Procédures courantes</a>
+          <a class="button" href="#depannage">Dépannage</a>
+        </div>
+        <div class="meta-grid" aria-label="Informations principales">
+          <div class="meta-item"><div class="meta-label">Application</div><div class="meta-value">Desktop Windows</div></div>
+          <div class="meta-item"><div class="meta-label">Données</div><div class="meta-value">Stockage local SQLite</div></div>
+          <div class="meta-item"><div class="meta-label">Protocoles</div><div class="meta-value">SNMP · SSH</div></div>
+        </div>
+      </div>
+
+      <aside class="quick-card" aria-label="Recherche rapide">
+        <div class="quick-title">
+          <h2>Accès rapide</h2>
+          <span class="status-dot" title="Notice prête"></span>
+        </div>
+        <label class="searchbox" for="searchInput">
+          <span>⌕</span>
+          <input id="searchInput" type="search" placeholder="Chercher : SSH, SNMP, backup, audit…" autocomplete="off" />
+        </label>
+        <div class="quick-list">
+          <a href="#credentials">Credentials <span>Sécurité</span></a>
+          <a href="#scan">Scan réseau <span>SNMP</span></a>
+          <a href="#backups">Backups <span>SSH</span></a>
+          <a href="#audit">Audit <span>Conformité</span></a>
+          <a href="#diff">Diff <span>Configurations</span></a>
+          <a href="#playbooks">Playbooks <span>Automatisation</span></a>
+          <a href="#depannage">Dépannage <span>Incidents</span></a>
+        </div>
+      </aside>
+    </section>
+
+    <div class="layout">
+      <aside class="sidebar" aria-label="Sommaire">
+        <h2>Sommaire</h2>
+        <nav class="nav" id="navLinks">
+          <a href="#presentation">Présentation</a>
+          <a href="#demarrage">Installation et démarrage</a>
+          <a href="#interface">Interface</a>
+          <a href="#credentials">Credentials</a>
+          <a href="#inventaire">Inventaire</a>
+          <a href="#scan">Scan réseau</a>
+          <a href="#backups">Backups SSH</a>
+          <a href="#audit">Audit</a>
+          <a href="#diff">Comparateur</a>
+          <a href="#playbooks">Playbooks</a>
+          <a href="#planificateur">Planificateur</a>
+          <a href="#topologie">Topologie et journaux</a>
+          <a href="#parametres">Paramètres</a>
+          <a href="#procedures">Procédures courantes</a>
+          <a href="#depannage">Dépannage</a>
+          <a href="#reference">Référence technique</a>
+        </nav>
+      </aside>
+
+      <main id="content">
+        <div class="no-results" id="noResults">Aucune section ne correspond à cette recherche.</div>
+
+        <section class="doc-section" id="presentation" data-title="présentation architecture application desktop windows snmp ssh audit sauvegarde">
+          <div class="section-head">
+            <div><h2>Présentation</h2></div>
+            <div class="section-index">01</div>
+          </div>
+          <p><strong>NetTools</strong> est une application de gestion réseau destinée aux opérations courantes d’administration : découverte SNMP, inventaire, sauvegarde de configurations, audit, comparaison de fichiers et exécution de commandes.</p>
+          <p>Elle fonctionne comme une application Windows autonome. Les données sont stockées localement et les secrets sont chiffrés avant d’être enregistrés.</p>
+
+          <div class="grid-3">
+            <div class="mini-card"><h3>Découvrir</h3><p>Scanner une plage IP, interroger les équipements en SNMP et récupérer les informations utiles.</p></div>
+            <div class="mini-card"><h3>Sauvegarder</h3><p>Se connecter en SSH aux équipements et archiver les configurations running ou startup.</p></div>
+            <div class="mini-card"><h3>Contrôler</h3><p>Auditer les configurations, identifier les écarts et préparer les corrections.</p></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Couche</th><th>Technologie</th><th>Rôle</th></tr></thead>
+              <tbody>
+                <tr><td>Interface</td><td>React + TypeScript</td><td>Affichage des modules, formulaires et tableaux</td></tr>
+                <tr><td>Application desktop</td><td>Wails v2</td><td>Intégration Windows via WebView2</td></tr>
+                <tr><td>Backend</td><td>Go</td><td>Logique métier, SNMP, SSH, traitements</td></tr>
+                <tr><td>Base locale</td><td>SQLite</td><td>Inventaire, historiques, tâches et paramètres</td></tr>
+                <tr><td>Sécurité</td><td>DPAPI / AES-256-GCM</td><td>Chiffrement des credentials</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="doc-section" id="demarrage" data-title="installation démarrage windows webview2 appdata nettools exe defender">
+          <div class="section-head"><div><h2>Installation et premier démarrage</h2></div><div class="section-index">02</div></div>
+          <div class="grid-2">
+            <div class="notice-card"><h3>Prérequis</h3><p>Poste Windows 10 ou Windows 11 en 64 bits. WebView2 doit être présent sur la machine.</p></div>
+            <div class="notice-card"><h3>Données locales</h3><p>Au premier lancement, NetTools crée son espace de travail dans <code>%APPDATA%\NetTools\</code>.</p></div>
+          </div>
+
+          <div class="steps">
+            <div class="step-card"><div><h3>Télécharger l’exécutable</h3><p>Récupérer <code>NetTools.exe</code> depuis la source de distribution prévue.</p></div></div>
+            <div class="step-card"><div><h3>Lancer l’application</h3><p>Exécuter le fichier. Si Windows affiche un avertissement, vérifier la provenance du fichier avant de continuer.</p></div></div>
+            <div class="step-card"><div><h3>Configurer les accès</h3><p>Créer au moins un credential SNMP et/ou SSH avant de lancer les premiers scans et backups.</p></div></div>
+          </div>
+
+          <div class="callout warning"><p><strong>À retenir :</strong> un scan SNMP sans credential valide donnera un résultat vide ou incomplet. Commencer par les credentials évite de perdre du temps.</p></div>
+        </section>
+
+        <section class="doc-section" id="interface" data-title="interface navigation barre latérale modules credential global zone principale">
+          <div class="section-head"><div><h2>Interface</h2></div><div class="section-index">03</div></div>
+          <p>L’interface est organisée autour d’une barre latérale et d’une zone principale. La barre latérale permet de changer de module et de sélectionner le credential global utilisé par défaut.</p>
+          <div class="grid-2">
+            <div class="mini-card"><h3>Barre latérale</h3><p>Accès aux modules : scan, inventaire, backups, audit, diff, playbooks, planificateur, topologie, journaux et paramètres.</p></div>
+            <div class="mini-card"><h3>Zone principale</h3><p>Affiche les formulaires, résultats, tableaux, historiques et actions du module en cours.</p></div>
+          </div>
+          <div class="callout"><p><strong>Credential global :</strong> lorsqu’aucun credential spécifique n’est affecté à un équipement, NetTools utilise celui sélectionné dans la barre latérale.</p></div>
+        </section>
+
+        <section class="doc-section" id="credentials" data-title="credentials sécurité ssh snmp mot de passe clé privée chiffrement dpapi aes actif">
+          <div class="section-head"><div><h2>Credentials</h2></div><div class="section-index">04</div></div>
+          <p>Les credentials regroupent les informations nécessaires aux connexions SNMP et SSH. Les mots de passe, clés privées et secrets SNMP sont chiffrés avant stockage.</p>
+          <div class="steps">
+            <div class="step-card"><div><h3>Ouvrir les paramètres</h3><p>Aller dans <strong>Paramètres</strong>, puis dans l’onglet <strong>Credentials</strong>.</p></div></div>
+            <div class="step-card"><div><h3>Ajouter un accès</h3><p>Créer une entrée avec les informations SSH, SNMP ou les deux selon l’usage prévu.</p></div></div>
+            <div class="step-card"><div><h3>Sélectionner le credential</h3><p>Utiliser le credential comme accès global ou l’associer directement à un équipement de l’inventaire.</p></div></div>
+          </div>
+          <details>
+            <summary>Modifier un credential existant</summary>
+            <p>Lors de la modification, les champs sensibles peuvent rester inchangés. Ne renseigner un nouveau secret que si l’on souhaite réellement le remplacer.</p>
+          </details>
+          <details>
+            <summary>Supprimer un credential</summary>
+            <p>La suppression retire l’entrée de NetTools. Si le credential supprimé était sélectionné comme accès global, il faudra en choisir un autre.</p>
+          </details>
+        </section>
+
+        <section class="doc-section" id="inventaire" data-title="inventaire équipements ip hostname vendor import export json connexion ssh stateless">
+          <div class="section-head"><div><h2>Inventaire des équipements</h2></div><div class="section-index">05</div></div>
+          <p>L’inventaire contient les équipements connus de NetTools. Il peut être alimenté manuellement ou importé depuis un fichier JSON.</p>
+          <div class="grid-2">
+            <div class="module-card"><h3>Ajouter un équipement</h3><div class="path">Inventaire</div><p>Renseigner l’adresse IP, le nom, le fabricant et les informations utiles. Associer un credential si l’équipement ne doit pas utiliser l’accès global.</p></div>
+            <div class="module-card"><h3>Importer / exporter</h3><div class="path">Inventaire · JSON</div><p>Exporter l’inventaire pour le conserver, le déplacer ou le réimporter plus tard. L’import permet de reconstruire rapidement une base propre.</p></div>
+          </div>
+          <div class="callout"><p><strong>Test de connexion :</strong> l’icône de test SSH permet de vérifier rapidement si l’équipement accepte la connexion avec le credential sélectionné.</p></div>
+        </section>
+
+        <section class="doc-section" id="scan" data-title="scan réseau snmp v2c v3 cidr manuel switches complet workers timeout excel">
+          <div class="section-head"><div><h2>Découverte réseau</h2></div><div class="section-index">06</div></div>
+          <p>Le scanner interroge les équipements en SNMP afin de récupérer les informations principales : identité, fabricant, description système et métadonnées disponibles.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Mode</th><th>Usage</th><th>Exemple</th></tr></thead>
+              <tbody>
+                <tr><td>Switches</td><td>Scan rapide sur les IP courantes d’équipements réseau.</td><td><code>10.0.1</code></td></tr>
+                <tr><td>Complet</td><td>Scan de tout un réseau en /24.</td><td><code>10.0.1</code></td></tr>
+                <tr><td>CIDR</td><td>Scan d’une plage personnalisée.</td><td><code>10.0.0.0/22</code></td></tr>
+                <tr><td>Manuel</td><td>Scan d’une liste d’adresses précises.</td><td><code>10.0.1.1, 10.0.1.2</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="grid-2">
+            <div class="mini-card"><h3>Workers</h3><p>Le réglage par défaut convient dans la majorité des cas. Monter progressivement si le réseau et les équipements suivent.</p></div>
+            <div class="mini-card"><h3>Timeout</h3><p>Augmenter le délai si les liens sont lents ou si certains équipements répondent tardivement.</p></div>
+          </div>
+          <div class="callout warning"><p><strong>Résultat vide :</strong> vérifier d’abord la communauté SNMP, la version utilisée, le port UDP/161 et la portée réseau depuis le poste.</p></div>
+        </section>
+
+        <section class="doc-section" id="backups" data-title="backups sauvegarde ssh running startup configuration historique terminal vendors cisco aruba hp huawei fortinet">
+          <div class="section-head"><div><h2>Sauvegardes SSH</h2></div><div class="section-index">07</div></div>
+          <p>Le module Backups se connecte aux équipements en SSH et récupère les configurations. Il peut travailler sur une sélection manuelle ou sur les résultats du dernier scan.</p>
+          <div class="steps">
+            <div class="step-card"><div><h3>Choisir le type de configuration</h3><p>Sélectionner <strong>Running</strong> pour la configuration active ou <strong>Startup</strong> pour la configuration sauvegardée.</p></div></div>
+            <div class="step-card"><div><h3>Sélectionner les cibles</h3><p>Choisir les équipements à traiter, puis vérifier le credential utilisé.</p></div></div>
+            <div class="step-card"><div><h3>Lancer la sauvegarde</h3><p>Suivre la progression et consulter l’historique une fois l’opération terminée.</p></div></div>
+          </div>
+          <details open>
+            <summary>Historique des sauvegardes</summary>
+            <p>L’historique permet de relire une configuration sauvegardée et d’ouvrir une console SSH directe sur l’équipement si une vérification manuelle est nécessaire.</p>
+          </details>
+        </section>
+
+        <section class="doc-section" id="audit" data-title="audit conformité règles sécurité score remédiation script correction cli copier">
+          <div class="section-head"><div><h2>Audit de conformité</h2></div><div class="section-index">08</div></div>
+          <p>Le module Audit contrôle les configurations par rapport à des règles prédéfinies. Chaque résultat indique si la règle est respectée et propose, lorsque c’est possible, une remédiation.</p>
+          <div class="grid-3">
+            <div class="mini-card"><h3>Sélectionner</h3><p>Choisir les équipements à contrôler depuis le dernier scan ou une liste manuelle.</p></div>
+            <div class="mini-card"><h3>Auditer</h3><p>Cocher les règles à appliquer puis lancer l’analyse.</p></div>
+            <div class="mini-card"><h3>Corriger</h3><p>Copier les commandes de remédiation après validation humaine.</p></div>
+          </div>
+          <div class="callout danger"><p><strong>Important :</strong> une commande de remédiation doit être relue avant exécution. Ne pas appliquer automatiquement sur un équipement de production sans contrôle.</p></div>
+        </section>
+
+        <section class="doc-section" id="diff" data-title="diff comparateur configurations split scroll synchronisé ajout suppression modification export html regex casse espaces">
+          <div class="section-head"><div><h2>Comparateur de configurations</h2></div><div class="section-index">09</div></div>
+          <p>Le comparateur sert à analyser deux versions d’une configuration : avant/après maintenance, running/startup, ou deux sauvegardes issues d’équipements proches.</p>
+          <div class="grid-2">
+            <div class="module-card"><h3>Vue côte à côte</h3><div class="path">Diff</div><p>Comparer deux fichiers avec un affichage synchronisé et des lignes colorées selon le type d’écart.</p></div>
+            <div class="module-card"><h3>Filtres</h3><div class="path">Diff · Options</div><p>Ignorer la casse, les espaces ou appliquer des expressions régulières pour réduire le bruit.</p></div>
+          </div>
+          <div class="tags">
+            <span class="tag">Ajout</span><span class="tag">Suppression</span><span class="tag">Modification</span><span class="tag">Ligne inchangée</span><span class="tag">Export HTML</span>
+          </div>
+        </section>
+
+        <section class="doc-section" id="playbooks" data-title="playbooks ssh yaml commandes expect timeout execution terminal temps réel">
+          <div class="section-head"><div><h2>Playbooks SSH</h2></div><div class="section-index">10</div></div>
+          <p>Les playbooks permettent d’exécuter une suite de commandes sur un ou plusieurs équipements. Le format utilisé est YAML.</p>
+          <div class="code-block">
+            <div class="code-title"><span>Exemple YAML</span><button class="button copy-btn" data-copy="playbookCode" type="button">Copier</button></div>
+<pre id="playbookCode"><code>name: Vérification Sécurité
+timeout: 120s
+steps:
+  - name: Version
+    command: show version
+  - name: SSH Status
+    command: show ip ssh
+    expect: SSH Enabled</code></pre>
+          </div>
+          <div class="steps">
+            <div class="step-card"><div><h3>Créer ou importer</h3><p>Préparer le fichier YAML depuis le module Playbooks.</p></div></div>
+            <div class="step-card"><div><h3>Choisir les équipements</h3><p>Sélectionner les cibles concernées par les commandes.</p></div></div>
+            <div class="step-card"><div><h3>Contrôler la sortie</h3><p>Lire le terminal temps réel et le résumé d’exécution.</p></div></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="planificateur" data-title="planificateur tâches backup scan réseau playbook commande ssh quotidien hebdomadaire mensuel cron">
+          <div class="section-head"><div><h2>Planificateur</h2></div><div class="section-index">11</div></div>
+          <p>Le planificateur automatise les opérations récurrentes : sauvegardes, scans, playbooks ou commandes SSH.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Type de tâche</th><th>Utilisation</th><th>Exemple</th></tr></thead>
+              <tbody>
+                <tr><td>Backup</td><td>Sauvegarder régulièrement les configurations.</td><td>Tous les lundis matin</td></tr>
+                <tr><td>Scan réseau</td><td>Actualiser la découverte des équipements.</td><td>Chaque nuit</td></tr>
+                <tr><td>Playbook</td><td>Lancer une séquence de vérification.</td><td>Avant une maintenance</td></tr>
+                <tr><td>Commande SSH</td><td>Exécuter une commande simple sur une cible.</td><td>Contrôle ponctuel</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <details>
+            <summary>Planification avancée</summary>
+            <p>Le mode avancé utilise une syntaxe Cron. Exemple : <code>0 30 8 * * 1</code> pour une exécution le lundi à 08:30.</p>
+          </details>
+        </section>
+
+        <section class="doc-section" id="topologie" data-title="topologie journaux logs événements reactflow poe vendor nettools json">
+          <div class="section-head"><div><h2>Topologie et journaux</h2></div><div class="section-index">12</div></div>
+          <div class="grid-2">
+            <div class="module-card"><h3>Topologie</h3><div class="path">Topologie</div><p>Affiche les équipements sous forme graphique avec un code visuel par fabricant et des indications utiles comme le PoE.</p></div>
+            <div class="module-card"><h3>Journaux</h3><div class="path">Journaux</div><p>Liste les actions effectuées et permet de consulter les fichiers de logs bruts au format JSON.</p></div>
+          </div>
+          <div class="callout"><p><strong>Chemin des logs :</strong> <code>%APPDATA%\NetTools\logs\nettools-YYYY-MM.log</code></p></div>
+        </section>
+
+        <section class="doc-section" id="parametres" data-title="paramètres thème langue workers répertoire backup dossier réseau nas">
+          <div class="section-head"><div><h2>Paramètres</h2></div><div class="section-index">13</div></div>
+          <p>Les paramètres regroupent les options générales de l’application.</p>
+          <div class="grid-2">
+            <div class="mini-card"><h3>Affichage</h3><p>Choix du thème et de la langue de l’interface.</p></div>
+            <div class="mini-card"><h3>Exécution</h3><p>Réglage du nombre de workers pour les opérations parallélisées.</p></div>
+            <div class="mini-card"><h3>Sauvegardes</h3><p>Choix du dossier de destination des backups. Un dossier réseau ou NAS est recommandé si les sauvegardes doivent être centralisées.</p></div>
+            <div class="mini-card"><h3>Credentials</h3><p>Création, modification et suppression des accès SNMP/SSH.</p></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="procedures" data-title="procédures workflows audit hebdomadaire migration configuration sauvegarde comparaison maintenance">
+          <div class="section-head"><div><h2>Procédures courantes</h2></div><div class="section-index">14</div></div>
+          <div class="grid-2">
+            <div class="notice-card">
+              <h3>Audit hebdomadaire</h3>
+              <ol>
+                <li>Lancer un scan réseau pour actualiser les équipements.</li>
+                <li>Vérifier l’inventaire et les credentials associés.</li>
+                <li>Créer une tâche d’audit planifiée.</li>
+                <li>Relire les résultats et traiter les écarts prioritaires.</li>
+              </ol>
+            </div>
+            <div class="notice-card">
+              <h3>Maintenance réseau</h3>
+              <ol>
+                <li>Faire un backup avant intervention.</li>
+                <li>Effectuer la modification sur l’équipement.</li>
+                <li>Faire un backup après intervention.</li>
+                <li>Comparer les deux versions dans le module Diff.</li>
+              </ol>
+            </div>
+          </div>
+          <div class="callout"><p><strong>Bonne pratique :</strong> toujours conserver un état avant/après pour les opérations sensibles. Le comparateur rend les écarts visibles rapidement.</p></div>
+        </section>
+
+        <section class="doc-section" id="depannage" data-title="dépannage scan vide backup incomplet db locked ssh refused logs erreur snmp timeout">
+          <div class="section-head"><div><h2>Dépannage</h2></div><div class="section-index">15</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Symptôme</th><th>Contrôles à effectuer</th></tr></thead>
+              <tbody>
+                <tr><td>Scan vide</td><td>Vérifier la communauté SNMP, la version SNMP, le port UDP/161, le timeout et la connectivité réseau.</td></tr>
+                <tr><td>Backup incomplet</td><td>Vérifier le vendor détecté, tester la connexion SSH et comparer avec une session terminal manuelle.</td></tr>
+                <tr><td>Erreur DB locked</td><td>Fermer les autres instances de NetTools puis relancer l’application.</td></tr>
+                <tr><td>SSH refused</td><td>Contrôler le port SSH, les droits du compte, les ACL et l’état du service SSH sur l’équipement.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <details open>
+            <summary>Où trouver les logs ?</summary>
+            <p>Les logs sont disponibles dans <code>%APPDATA%\NetTools\logs\</code>. Le fichier mensuel suit le format <code>nettools-YYYY-MM.log</code>.</p>
+          </details>
+        </section>
+
+        <section class="doc-section" id="reference" data-title="référence technique variables remédiation wails ipc événements scan progress backup terminal output">
+          <div class="section-head"><div><h2>Référence technique</h2></div><div class="section-index">16</div></div>
+          <h3>Variables utilisables dans les remédiations</h3>
+          <div class="tags"><span class="tag">{{hostname}}</span><span class="tag">{{ip}}</span><span class="tag">{{vendor}}</span></div>
+          <h3>Événements internes</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Événement</th><th>Données</th></tr></thead>
+              <tbody>
+                <tr><td><code>scan:progress</code></td><td><code>{ip, done, total, percent}</code></td></tr>
+                <tr><td><code>backup:progress</code></td><td><code>{device_id, status, error}</code></td></tr>
+                <tr><td><code>terminal:output</code></td><td><code>{line, error}</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="footer">
+      NetTools v1.3.2 — Notice d’utilisation · Dernière mise à jour : avril 2026
+    </footer>
+  </div>
+
+  <script>
+    const root = document.documentElement;
+    const savedTheme = localStorage.getItem('nettools-notice-theme');
+    if (savedTheme) root.dataset.theme = savedTheme;
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const next = root.dataset.theme === 'light' ? 'dark' : 'light';
+      root.dataset.theme = next;
+      localStorage.setItem('nettools-notice-theme', next);
+    });
+
+    const progress = document.getElementById('pageProgress');
+    const updateProgress = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const height = document.documentElement.scrollHeight - window.innerHeight;
+      progress.style.transform = `scaleX(${height > 0 ? scrollTop / height : 0})`;
+    };
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+
+    const sections = Array.from(document.querySelectorAll('.doc-section'));
+    const navLinks = Array.from(document.querySelectorAll('.nav a, .quick-list a'));
+
+    const setActive = () => {
+      let current = sections[0]?.id;
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= 140) current = section.id;
+      }
+      navLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${current}`));
+    };
+    window.addEventListener('scroll', setActive, { passive: true });
+    setActive();
+
+    const searchInput = document.getElementById('searchInput');
+    const noResults = document.getElementById('noResults');
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim().toLowerCase();
+      let visible = 0;
+      sections.forEach(section => {
+        const haystack = (section.innerText + ' ' + (section.dataset.title || '')).toLowerCase();
+        const match = !q || haystack.includes(q);
+        section.classList.toggle('hidden-by-search', !match);
+        if (match) visible++;
+      });
+      noResults.classList.toggle('show', visible === 0);
+    });
+
+    document.querySelectorAll('[data-copy]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-copy');
+        const el = document.getElementById(id);
+        if (!el) return;
+        await navigator.clipboard.writeText(el.innerText);
+        const old = btn.textContent;
+        btn.textContent = 'Copié';
+        setTimeout(() => btn.textContent = old, 1200);
+      });
+    });
+  </script>
+</body>
+</html>

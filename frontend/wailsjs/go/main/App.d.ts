@@ -36,6 +36,8 @@ export function ExportScanToExcel(arg1:Array<string>):Promise<string>;
 
 export function GetAllBackups():Promise<Array<models.Backup>>;
 
+export function GetAllPortStates():Promise<Array<models.PortState>>;
+
 export function GetAuditLogs(arg1:main.AuditLogQuery):Promise<Array<models.AuditLog>>;
 
 export function GetAuditRules():Promise<Array<models.AuditRule>>;
@@ -60,6 +62,8 @@ export function GetLogFiles():Promise<Array<string>>;
 
 export function GetPlaybooks():Promise<Array<models.Playbook>>;
 
+export function GetPortStates(arg1:string):Promise<Array<models.PortState>>;
+
 export function GetScheduledJobs():Promise<Array<models.ScheduledJob>>;
 
 export function GetSettings():Promise<main.AppSettings>;
@@ -75,6 +79,8 @@ export function RunAuditFiltered(arg1:Array<string>,arg2:Array<string>):Promise<
 export function RunBackup(arg1:main.BackupRequest):Promise<Array<models.Backup>>;
 
 export function RunPlaybook(arg1:main.PlaybookRunRequest):Promise<Array<playbook.ExecutionResult>>;
+
+export function RunPortTrackerScan(arg1:Array<string>):Promise<void>;
 
 export function RunSSHCommands(arg1:main.SSHCommandRequest):Promise<Array<ssh.Result>>;
 

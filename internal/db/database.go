@@ -48,6 +48,7 @@ func Init(appDataDir string) error {
 		&models.PlaybookExecution{},
 		&models.SchemaMigration{},
 		&models.DeviceLink{},
+		&models.PortState{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}

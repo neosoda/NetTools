@@ -160,3 +160,30 @@ type DeviceLink struct {
 	LinkType         string    `json:"link_type"`          // "trunk"|"access"|"unknown"
 	UpdatedAt        time.Time `json:"updated_at"`
 }
+
+type PortState struct {
+	ID                 string     `json:"id" gorm:"primaryKey"`
+	DeviceID           string     `json:"device_id" gorm:"uniqueIndex:idx_device_port;not null"`
+	IfIndex            int        `json:"if_index" gorm:"uniqueIndex:idx_device_port"`
+	IfName             string     `json:"if_name"`
+	IfAlias            string     `json:"if_alias"`
+	IfType             int        `json:"if_type"`
+	AdminStatus        int        `json:"admin_status"`
+	OperStatus         int        `json:"oper_status"`
+	SpeedMbps          int64      `json:"speed_mbps"`
+	FirstSeenAt        time.Time  `json:"first_seen_at"`
+	LastSeenAt         time.Time  `json:"last_seen_at"`
+	LastUpAt           *time.Time `json:"last_up_at"`
+	LastDownAt         *time.Time `json:"last_down_at"`
+	LastStatusChangeAt *time.Time `json:"last_status_change_at"`
+	UpTransitions      int64      `json:"up_transitions"`
+	DownTransitions    int64      `json:"down_transitions"`
+	LastMAC            string     `json:"last_mac"`
+	LastMACSeenAt      *time.Time `json:"last_mac_seen_at"`
+	HasLLDPNeighbor    bool       `json:"has_lldp_neighbor"`
+	Classification     string     `json:"classification"`
+	Confidence         int        `json:"confidence"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+}
+
