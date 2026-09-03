@@ -6,10 +6,10 @@
 
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
-[![GitHub release](https://img.shields.io/badge/Version-1.4.1-blue?logo=github)](../../releases)
+[![GitHub release](https://img.shields.io/github/v/release/neosoda/NetTools?color=blue&label=Version&logo=github)](../../releases)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
-[![Go Version](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](https://golang.org)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 
 [Télécharger](#-téléchargement) • [Documentation](#-documentation) • [Fonctionnalités](#-fonctionnalités) • [Contribution](#-contribution)
@@ -38,9 +38,7 @@
 <td width="50%">
 
 ### 🔗 Découverte Réseau
-- Scan **SNMP v1/v2c/v3 USM** rapide et fiable
-- Niveaux SNMPv3 : **noAuthNoPriv**, **authNoPriv**, **authPriv**
-- Authentification MD5, SHA-1 et SHA-2 ; chiffrement DES et AES-128/192/256
+- Scan **SNMP v2c/v3** rapide et fiable
 - Saisie manuelle ou import d'IPs
 - Collecte automatique de métadonnées
 - Export **Excel** formaté et professionnel
@@ -75,16 +73,13 @@
 </td>
 <td width="50%">
 
-### 🔄 Comparateur de Configuration _(v1.3.2)_
-- **Vue Split** avec scroll synchronisé
-- Diff **sémantique** : détecte changements vs insertions
-- Code couleur : 🟢 insertion · 🔴 suppression · 🟡 modification
-- **Diff only** : masque les lignes inchangées
-- Toggle Split/Unifié pour vue alignée
-- Stats enrichies : +/−/~/= lignes
+### 🔄 Comparateur de Configuration
+- **Diff ligne par ligne** avec indicateurs +/-
 - Ignorer des patterns (regex)
 - Comparaison entre deux backups
 - Export **HTML** standalone
+- Thème sombre et responsive
+- Partageable sans dépendances
 
 </td>
 </tr>
@@ -128,31 +123,13 @@
 </td>
 <td width="50%">
 
-### 📝 Journaux & Inventaire _(v1.3.2)_
-- **Inventaire stateless** : vide à chaque lancement
-- Import/Export JSON explicites (boutons ↑↓)
-- Événements cliquables avec contexte modal
+### 📝 Journaux & Inventaire
+- Événements cliquables
+- Modal de détail avec contexte
 - Lecteur de fichiers `.log` mensuels
-- Gestion CRUD équipements + test SSH
-- Nettoyage rapide (Eraser) avec confirmation
-
-</td>
-</tr>
-
-<tr>
-<td width="50%">
-
-### 🔐 Gestion des Credentials _(v1.4.0)_
-- **Auto-activation** : nouveau credential complet = automatiquement actif
-- Badge **ACTIF** dans la liste des credentials
-- Support multi-protocoles : SSH, password, SNMP v1/v2c/v3 USM
-- Secrets SNMPv3 chiffrés utilisés par le scan, LLDP et le diagnostic ciblé
-- Chiffrement DPAPI (Windows) ou AES-256-GCM
-- Suppression du credential actif = réinitialisation propre
-- Édition et rotation simplifiées
-
-</td>
-<td width="50%">
+- Gestion CRUD équipements
+- Test de connexion SSH
+- Auto-rafraîchissement
 
 </td>
 </tr>
@@ -168,7 +145,7 @@
 ├─────────────────────────────────────────────┤
 │                                             │
 │  ┌──────────────────────────────────────┐  │
-│  │  Frontend (React 19 + TypeScript)    │  │
+│  │  Frontend (React 18 + TypeScript)    │  │
 │  │  • TailwindCSS                       │  │
 │  │  • React Router                      │  │
 │  │  • React Query                       │  │
@@ -182,7 +159,7 @@
 │  └──────────────────────────────────────┘  │
 │                   ↕️                        │
 │  ┌──────────────────────────────────────┐  │
-│  │  Backend (Go 1.26.5)                 │  │
+│  │  Backend (Go 1.24)                   │  │
 │  │  • SNMP (gosnmp)                     │  │
 │  │  • SSH (x/crypto/ssh)                │  │
 │  │  • SQLite + GORM                     │  │
@@ -201,9 +178,9 @@
 
 | Composant | Technologie | Rôle |
 |-----------|------------|------|
-| **Frontend** | React 19 + TypeScript | Interface moderne et réactive |
+| **Frontend** | React 18 + TypeScript | Interface moderne et réactive |
 | **Desktop** | Wails v2 | Framework de distribution |
-| **Backend** | Go 1.26.5 | Logique métier et communications |
+| **Backend** | Go 1.24 | Logique métier et communications |
 | **Database** | SQLite + GORM | Persistance des données |
 | **Réseau** | gosnmp, x/crypto/ssh | SNMP et SSH |
 | **UI Framework** | TailwindCSS | Design responsive |
@@ -218,39 +195,17 @@
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.4.1](../../releases/download/v1.4.1/NetTools_v1.4.1.exe)
+### [⬇️ Télécharger NetTools v1.5.0](../../releases/download/v1.5.0/NetTools.exe)
 
-**Windows 10/11 • 64-bit • ~20 MB**
+**Windows 10/11 • 64-bit • ~21 MB**
 
 </div>
 
 ### Installation
 
-#### Explication simple
-
-NetTools est un outil d'administration réseau. Comme il scanne le réseau et se
-connecte à des équipements, quelques antivirus automatiques peuvent confondre
-ses fonctions légitimes avec celles d'un logiciel malveillant. VirusTotal
-affiche actuellement 3 alertes sur 70 moteurs pour la version officielle. Ce
-résultat est compatible avec des faux positifs, mais aucun scan ne constitue
-une garantie absolue.
-
-1. Téléchargez `NetTools_v1.4.1.exe` uniquement depuis la [release GitHub officielle](../../releases/tag/v1.4.1).
-2. Vérifiez son empreinte SHA-256 :
-   ```powershell
-   Get-FileHash -Algorithm SHA256 .\NetTools_v1.4.1.exe
-   ```
-   Empreinte attendue pour la version 1.4.1 :
-   `BB365ABC7A9790C2E91D2F8C0517C368436CF43143C1AD7304FEDFA8B3270C49`
-3. Consultez le [rapport VirusTotal de la version 1.4.1](https://www.virustotal.com/gui/file/bb365abc7a9790c2e91d2f8c0517c368436cf43143c1ad7304fedfa8b3270c49)
-   et lisez l'[explication technique complète](SECURITY.md).
-4. Double-cliquez sur l'exécutable. Le binaire n'étant pas signé par une autorité
-   publique, SmartScreen peut afficher « Windows a protégé votre ordinateur ».
-   Si le fichier provient bien de cette page et que son empreinte correspond exactement,
-   cliquez sur **Informations complémentaires**, vérifiez que le nom du fichier est
-   `NetTools_v1.4.1.exe`, puis sur **Exécuter quand même** uniquement si vous acceptez
-   le risque signalé par l'analyse VirusTotal.
-5. L'application crée automatiquement ses dossiers de données dans :
+1. Téléchargez `NetTools.exe` depuis la [page Releases](../../releases)
+2. Exécutez l'installateur (ou double-cliquez)
+3. L'application crée automatiquement ses dossiers de données dans :
    ```
    %APPDATA%\NetTools\
    ├── nettools.db          (Base de données SQLite)
@@ -259,12 +214,11 @@ une garantie absolue.
    └── settings.json            (Préférences utilisateur)
    ```
 
-L'inventaire est **stateless** : il repart vide à chaque lancement. Utilisez les boutons d'**export/import JSON** de la page Inventaire si vous voulez conserver une liste d'équipements entre deux sessions.
-
 ### Prérequis
 
 - **Windows 10/11** (64-bit)
 - **WebView2 Runtime** (inclus dans Windows 11, [télécharger pour W10](https://developer.microsoft.com/en-us/microsoft-edge/webview2))
+- **.NET Framework 4.7+** (recommandé)
 
 ---
 
@@ -300,16 +254,9 @@ Comparateur → Sélectionner 2 backups → Configurer filtres → Exporter HTML
 
 | Document | Description |
 |----------|-------------|
-| [NOTICE.md](./NOTICE.md) | Source de la notice utilisateur complète |
-| [tools/notice_rendered.html](./tools/notice_rendered.html) | Rendu HTML de la notice prêt à relire dans un navigateur |
+| [NOTICE.md](./NOTICE.md) | Guide utilisateur complet + règles d'audit |
 | [go.mod](./go.mod) | Dépendances Go |
 | [Architecture](#architecture) | Structure du projet |
-
-Pour régénérer les notices après modification :
-
-```bash
-python tools/generate_notice_pdf.py
-```
 
 ### Supports Multi-Vendor
 
@@ -368,8 +315,8 @@ nettools/
 
 ### Prérequis
 
-- **Go 1.26.5+**
-- **Node.js 22.22+**
+- **Go 1.21+**
+- **Node.js 18+**
 - **Wails CLI v2** : `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 - **Git**
 
