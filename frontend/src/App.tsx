@@ -22,7 +22,7 @@ import TopologyPage from './pages/TopologyPage'
 import LogsPage from './pages/LogsPage'
 import SettingsPage from './pages/SettingsPage'
 import InventoryPage from './pages/InventoryPage'
-
+import PortTrackerPage from './pages/PortTrackerPage'
 const navItems = [
   { to: '/scan', icon: Network, label: 'Découverte' },
   { to: '/inventory', icon: Package, label: 'Inventaire' },
@@ -32,6 +32,7 @@ const navItems = [
   { to: '/playbook', icon: Terminal, label: 'Playbooks' },
   { to: '/scheduler', icon: CalendarClock, label: 'Planificateur' },
   { to: '/topology', icon: GitGraph, label: 'Topologie' },
+  { to: '/porttracker', icon: Activity, label: 'Utilisation Ports' },
   { to: '/logs', icon: ScrollText, label: 'Journaux' },
   { to: '/settings', icon: Settings, label: 'Paramètres' },
 ]
@@ -167,7 +168,8 @@ function AppContent() {
               </button>
             )}
             {stopStatus && <p className="text-xs text-center text-emerald-400 font-medium animate-in fade-in slide-in-from-bottom-2">{stopStatus}</p>}
-            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600 text-center">Version 1.4.1</p>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-600 text-center">Version 1.5.0</p>
+
           </div>
         </div>
       </nav>
@@ -185,6 +187,7 @@ function AppContent() {
             <Route path="/playbook" element={<PlaybookPage />} />
             <Route path="/scheduler" element={<SchedulerPage />} />
             <Route path="/topology" element={<TopologyPage />} />
+            <Route path="/porttracker" element={<PortTrackerPage />} />
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

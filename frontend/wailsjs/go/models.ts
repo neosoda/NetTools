@@ -658,6 +658,88 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class PortState {
+	    id: string;
+	    device_id: string;
+	    if_index: number;
+	    if_name: string;
+	    if_alias: string;
+	    if_type: number;
+	    admin_status: number;
+	    oper_status: number;
+	    speed_mbps: number;
+	    // Go type: time
+	    first_seen_at: any;
+	    // Go type: time
+	    last_seen_at: any;
+	    // Go type: time
+	    last_up_at?: any;
+	    // Go type: time
+	    last_down_at?: any;
+	    // Go type: time
+	    last_status_change_at?: any;
+	    up_transitions: number;
+	    down_transitions: number;
+	    last_mac: string;
+	    // Go type: time
+	    last_mac_seen_at?: any;
+	    has_lldp_neighbor: boolean;
+	    classification: string;
+	    confidence: number;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new PortState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.device_id = source["device_id"];
+	        this.if_index = source["if_index"];
+	        this.if_name = source["if_name"];
+	        this.if_alias = source["if_alias"];
+	        this.if_type = source["if_type"];
+	        this.admin_status = source["admin_status"];
+	        this.oper_status = source["oper_status"];
+	        this.speed_mbps = source["speed_mbps"];
+	        this.first_seen_at = this.convertValues(source["first_seen_at"], null);
+	        this.last_seen_at = this.convertValues(source["last_seen_at"], null);
+	        this.last_up_at = this.convertValues(source["last_up_at"], null);
+	        this.last_down_at = this.convertValues(source["last_down_at"], null);
+	        this.last_status_change_at = this.convertValues(source["last_status_change_at"], null);
+	        this.up_transitions = source["up_transitions"];
+	        this.down_transitions = source["down_transitions"];
+	        this.last_mac = source["last_mac"];
+	        this.last_mac_seen_at = this.convertValues(source["last_mac_seen_at"], null);
+	        this.has_lldp_neighbor = source["has_lldp_neighbor"];
+	        this.classification = source["classification"];
+	        this.confidence = source["confidence"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ScheduledJob {
 	    id: string;
 	    name: string;

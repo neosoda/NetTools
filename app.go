@@ -18,6 +18,7 @@ import (
 	"nettools/internal/db"
 	"nettools/internal/db/models"
 	"nettools/internal/diff"
+	"nettools/internal/porttracker"
 	"nettools/internal/logger"
 	"nettools/internal/playbook"
 	"nettools/internal/scheduler"
@@ -2017,6 +2018,9 @@ func (a *App) runScheduledJob(ctx context.Context, jobType string, payload map[s
 		} else {
 			_, err = a.RunAudit(deviceIDs)
 		}
+	case "port_scan":
+		deviceIDs := extractStringSlice(payload, "device_ids")
+		err = a.RunPortTrackerScan(deviceIDs)
 	case "playbook":
 		playbookID := extractString(payload, "playbook_id", "")
 		deviceIDs := extractStringSlice(payload, "device_ids")
@@ -2083,3 +2087,47 @@ func extractStringSlice(m map[string]interface{}, key string) []string {
 	}
 	return nil
 }
+
+// ─────────────────────────────────────────────
+// PORT TRACKER
+// ─────────────────────────────────────────────
+
+func (a *App) RunPortTrackerScan(deviceIDs []string) error {
+	a.mu.Lock()
+	if a.scanCancel != nil {
+		a.mu.Unlock()
+		return fmt.Errorf("a scan is already in progress")
+	}
+	var ctx context.Context
+	ctx, a.scanCancel = context.WithCancel(a.ctx)
+	a.mu.Unlock()
+
+	defer func() {
+		a.mu.Lock()
+		a.scanCancel = nil
+		a.mu.Unlock()
+	}()
+
+	runtime.EventsEmit(a.ctx, "porttracker:scan:started")
+	err := porttracker.RunScan(ctx, deviceIDs)
+	runtime.EventsEmit(a.ctx, "porttracker:scan:finished", map[string]interface{}{
+		"error": err != nil,
+	})
+	
+	return err
+}
+
+func (a *App) GetPortStates(deviceID string) ([]models.PortState, error) {
+	var states []models.PortState
+	query := db.DB.Model(&models.PortState{})
+	if deviceID != "" {
+		query = query.Where("device_id = ?", deviceID)
+	}
+	err := query.Order("if_index ASC").Find(&states).Error
+	return states, err
+}
+
+func (a *App) GetAllPortStates() ([]models.PortState, error) {
+	return a.GetPortStates("")
+}
+

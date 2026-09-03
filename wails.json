@@ -20,5 +20,10 @@
   },
   "windows": {
     "icon": "build/appicon.ico"
+  },
+  "info": {
+    "productVersion": "1.5.0",
+    "productName": "NetTools",
+    "companyName": "neosoda"
   }
 }

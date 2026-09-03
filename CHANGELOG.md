@@ -6,6 +6,17 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.5.0] - 2026-08-29
+
+### Ajouts
+- **Module Port Tracker** : suivi historique de l'utilisation des ports (Last UP, Last DOWN).
+- **Classification et Score de confiance** pour l'identification des ports libres.
+- **Enrichissement FDB et LLDP** pour fiabiliser la détection d'infrastructure.
+- **Job scheduler `port_scan`** dédié à la mise à jour de l'historique des ports.
+- **Page Interface UI** pour visualiser, filtrer et rechercher dans le statut des ports.
+
+---
+
 ## [1.4.1] - 2026-07-26
 
 ### Sécurité

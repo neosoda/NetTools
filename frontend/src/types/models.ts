@@ -40,3 +40,30 @@ export interface Playbook {
   description?: string;
   content: string; // YAML
 }
+
+export interface PortState {
+  id: string;
+  device_id: string;
+  if_index: number;
+  if_name: string;
+  if_alias: string;
+  if_type: number;
+  admin_status: number;
+  oper_status: number;
+  speed_mbps: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_up_at?: string;
+  last_down_at?: string;
+  last_status_change_at?: string;
+  up_transitions: number;
+  down_transitions: number;
+  last_mac: string;
+  last_mac_seen_at?: string;
+  has_lldp_neighbor: boolean;
+  classification: string;
+  confidence: number;
+  created_at: string;
+  updated_at: string;
+}
+
