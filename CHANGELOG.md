@@ -6,6 +6,23 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.5.1] - 2026-10-11
+
+### Ajouts
+- **Port Tracker** :
+  - Mapping équipement (Hostname / IP) enrichi sur chaque port avec colonne dédiée dans le tableau.
+  - Filtre interactif par commutateur / switch pour isoler rapidement les interfaces.
+  - Export CSV complet au format UTF-8 avec BOM (RFC 4180) pour ouverture directe dans Excel.
+- **Gestion des Backups** :
+  - Cartes métriques récapitulatives d'état (Total, Succès, Échecs, Dernier backup).
+  - Indicateur visuel d'intégrité SHA256 avec infobulle du hash sur chaque sauvegarde.
+  - Bouton d'export d'archive ZIP vérifiée (`ExportBackupsZip`).
+- **SNMPv3 USM** :
+  - Bouton « Tester » sur chaque profil d'identification SNMP configuré dans les Paramètres.
+  - Modal interactif de diagnostic en direct avec test de connectivité et rapport détaillé (`TestSNMPHostWithCredential`).
+
+---
+
 ## [1.5.0] - 2026-08-29
 
 ### Ajouts

@@ -1,0 +1,9 @@
+{
+  "specId": "nettools-v1-5-improvements",
+  "outcome": "human_approved",
+  "summary": "Approbation humaine des ameliorations Port Tracker (CSV/filtres), Sauvegardes (synthese/ZIP SHA256) et SNMPv3 (diagnostic interactif).",
+  "reviewedAt": "2026-10-11T09:54:24.390Z",
+  "actor": "human",
+  "approver": "neosoda",
+  "identityVerified": false
+}

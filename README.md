@@ -6,7 +6,7 @@
 
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
-[![GitHub release](https://img.shields.io/badge/Version-1.4.1-blue?logo=github)](../../releases)
+[![GitHub release](https://img.shields.io/badge/Version-1.5.1-blue?logo=github)](../../releases)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
 [![Go Version](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -218,7 +218,7 @@
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.5.0](../../releases/download/v1.5.0/NetTools.exe)
+### [⬇️ Télécharger NetTools v1.5.1](../../releases/download/v1.5.1/NetTools.exe)
 
 **Windows 10/11 • 64-bit • ~21 MB**
 
