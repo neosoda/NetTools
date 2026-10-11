@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Activity, HardDrive, RefreshCw, AlertTriangle, ShieldCheck, CheckCircle2, Clock } from 'lucide-react';
-import { GetAllPortStates, RunPortTrackerScan } from '../../wailsjs/go/main/App';
+import { Activity, RefreshCw, Download } from 'lucide-react';
+import { GetAllPortStates, RunPortTrackerScan, GetDevices } from '../../wailsjs/go/main/App';
 import { PortState, Device } from '../types/models';
 
 export default function PortTrackerPage() {
   const queryClient = useQueryClient();
   const [filterClass, setFilterClass] = useState<string>('ALL');
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('ALL');
   const [search, setSearch] = useState('');
   
   const { data: ports = [], isLoading } = useQuery<PortState[]>({
@@ -14,8 +15,18 @@ export default function PortTrackerPage() {
     queryFn: () => GetAllPortStates(),
   });
 
-  // Just placeholder for devices mapping if we want to show device names.
-  // Assuming another query or context has them. But we can just show device_id for now if device is missing.
+  const { data: devices = [] } = useQuery<Device[]>({
+    queryKey: ['devices'],
+    queryFn: () => GetDevices(),
+  });
+
+  const deviceMap = useMemo(() => {
+    const map: Record<string, Device> = {};
+    for (const d of devices) {
+      map[d.id] = d;
+    }
+    return map;
+  }, [devices]);
 
   const scanMutation = useMutation({
     mutationFn: () => RunPortTrackerScan([]),
@@ -28,17 +39,23 @@ export default function PortTrackerPage() {
   const filteredPorts = useMemo(() => {
     return ports.filter(p => {
       if (filterClass !== 'ALL' && p.classification !== filterClass) return false;
+      if (selectedDeviceId !== 'ALL' && p.device_id !== selectedDeviceId) return false;
       if (search) {
         const s = search.toLowerCase();
+        const dev = deviceMap[p.device_id];
+        const devHost = (dev?.hostname || '').toLowerCase();
+        const devIp = (dev?.ip || '').toLowerCase();
         return (
           p.if_name.toLowerCase().includes(s) ||
           p.if_alias.toLowerCase().includes(s) ||
-          p.last_mac.toLowerCase().includes(s)
+          p.last_mac.toLowerCase().includes(s) ||
+          devHost.includes(s) ||
+          devIp.includes(s)
         );
       }
       return true;
     });
-  }, [ports, filterClass, search]);
+  }, [ports, filterClass, selectedDeviceId, search, deviceMap]);
 
   const stats = useMemo(() => {
     const total = ports.length;
@@ -71,6 +88,35 @@ export default function PortTrackerPage() {
     UNKNOWN: 'Inconnu'
   };
 
+  const handleExportCSV = () => {
+    if (filteredPorts.length === 0) return;
+    const headers = ['Equipement', 'IP', 'Port', 'Description', 'Etat Op.', 'Dernier UP', 'Derniere MAC', 'Classification', 'Score Confiance (%)'];
+    const rows = filteredPorts.map(p => {
+      const dev = deviceMap[p.device_id];
+      return [
+        `"${(dev?.hostname || '').replace(/"/g, '""')}"`,
+        `"${(dev?.ip || p.device_id).replace(/"/g, '""')}"`,
+        `"${p.if_name.replace(/"/g, '""')}"`,
+        `"${(p.if_alias || '').replace(/"/g, '""')}"`,
+        p.oper_status === 1 ? 'UP' : 'DOWN',
+        p.last_up_at ? new Date(p.last_up_at).toISOString().split('T')[0] : '',
+        `"${(p.last_mac || '').replace(/"/g, '""')}"`,
+        `"${classLabels[p.classification] || p.classification}"`,
+        p.confidence
+      ].join(';');
+    });
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `NetTools_PortTracker_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-6 h-full flex flex-col space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
@@ -81,14 +127,25 @@ export default function PortTrackerPage() {
           </h1>
           <p className="text-slate-400 mt-1">Historique persistant et détection des ports libres</p>
         </div>
-        <button
-          onClick={() => scanMutation.mutate()}
-          disabled={scanMutation.isPending}
-          className="btn-primary flex items-center gap-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
-          {scanMutation.isPending ? 'Scan en cours...' : 'Lancer un scan'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportCSV}
+            disabled={filteredPorts.length === 0}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            title="Exporter la liste filtrée au format CSV (compatible Excel)"
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+            Exporter CSV
+          </button>
+          <button
+            onClick={() => scanMutation.mutate()}
+            disabled={scanMutation.isPending}
+            className="btn-primary flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
+            {scanMutation.isPending ? 'Scan en cours...' : 'Lancer un scan'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
@@ -102,10 +159,10 @@ export default function PortTrackerPage() {
       </div>
 
       <div className="panel flex-1 flex flex-col min-h-0">
-        <div className="p-4 border-b border-slate-700 flex gap-4">
+        <div className="p-4 border-b border-slate-700 flex flex-wrap gap-4 items-center">
           <input
             type="text"
-            placeholder="Rechercher port, description, MAC..."
+            placeholder="Rechercher port, description, MAC, IP ou machine..."
             className="input-field max-w-xs"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -120,11 +177,27 @@ export default function PortTrackerPage() {
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
+          <select 
+            className="input-field max-w-xs"
+            value={selectedDeviceId}
+            onChange={e => setSelectedDeviceId(e.target.value)}
+          >
+            <option value="ALL">Tous les équipements</option>
+            {devices.map(d => (
+              <option key={d.id} value={d.id}>
+                {d.hostname ? `${d.hostname} (${d.ip})` : d.ip}
+              </option>
+            ))}
+          </select>
+          <div className="text-xs text-slate-400 ml-auto">
+            {filteredPorts.length} port(s) affiché(s)
+          </div>
         </div>
         <div className="flex-1 overflow-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-800/50 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
+                <th className="p-4 font-medium text-slate-300">Équipement</th>
                 <th className="p-4 font-medium text-slate-300">Port</th>
                 <th className="p-4 font-medium text-slate-300">Description</th>
                 <th className="p-4 font-medium text-slate-300">État Op.</th>
@@ -136,12 +209,16 @@ export default function PortTrackerPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-slate-400">Chargement...</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-slate-400">Chargement...</td></tr>
               ) : filteredPorts.length === 0 ? (
-                <tr><td colSpan={7} className="p-8 text-center text-slate-400">Aucun port trouvé</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-slate-400">Aucun port trouvé</td></tr>
               ) : (
                 filteredPorts.map(p => (
                   <tr key={p.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
+                    <td className="p-4 text-sm font-medium">
+                      <div className="text-slate-200">{deviceMap[p.device_id]?.hostname || 'Switch'}</div>
+                      <div className="text-xs text-slate-400 font-mono">{deviceMap[p.device_id]?.ip || p.device_id}</div>
+                    </td>
                     <td className="p-4 font-mono text-sm">{p.if_name}</td>
                     <td className="p-4 text-sm text-slate-300">{p.if_alias || <span className="text-slate-500 italic">Vide</span>}</td>
                     <td className="p-4">

@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "createdAt": "2026-10-11T09:48:51.097Z",
+  "specId": "nettools-v1-5-improvements",
+  "findings": [
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-48-45-230Z-build predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-005"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-48-38-293Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-004"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-48-36-654Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-003"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-48-34-954Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-002"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-45-54-388Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-004"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-43-53-262Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-003"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-40-30-489Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-002"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-38-55-122Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-002"
+    },
+    {
+      "id": "stale-evidence",
+      "severity": "warning",
+      "message": "Evidence 2026-10-11T09-38-48-163Z-test predates the current project state.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-002"
+    },
+    {
+      "id": "missing-current-evidence",
+      "severity": "error",
+      "message": "Completed task T-002 lacks current verified evidence.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-002"
+    },
+    {
+      "id": "missing-current-evidence",
+      "severity": "error",
+      "message": "Completed task T-003 lacks current verified evidence.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-003"
+    },
+    {
+      "id": "missing-current-evidence",
+      "severity": "error",
+      "message": "Completed task T-004 lacks current verified evidence.",
+      "specId": "nettools-v1-5-improvements",
+      "taskId": "T-004"
+    }
+  ],
+  "closures": [
+    {
+      "specId": "nettools-v1-5-improvements",
+      "ready": false,
+      "requiresHumanApproval": true,
+      "reasons": [
+        "The latest audit has blocking findings.",
+        "A linked task lacks current verified evidence.",
+        "Human approval is required."
+      ]
+    }
+  ]
+}

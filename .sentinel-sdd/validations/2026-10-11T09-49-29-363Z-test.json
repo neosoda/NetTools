@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "id": "2026-10-11T09-49-29-363Z-test",
+  "specId": "nettools-v1-5-improvements",
+  "taskId": "T-003",
+  "requirements": [
+    "FR-BK-01"
+  ],
+  "acceptance": [
+    "AC-BK-01"
+  ],
+  "check": "test",
+  "command": [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+    "run",
+    "test"
+  ],
+  "cwd": "B:\\OneDrive RGE\\OneDrive - Région GRAND EST\\TOOLS\\PROJETS\\NetTools",
+  "packageManager": {
+    "name": "npm",
+    "resolvedVersion": "11.19.0",
+    "via": "fallback"
+  },
+  "status": "passed",
+  "startedAt": "2026-10-11T09:49:27.755Z",
+  "finishedAt": "2026-10-11T09:49:29.363Z",
+  "durationMs": 1608,
+  "exitCode": 0,
+  "output": "\n> test\n> go test ./internal/... -count=1\n\nok  \tnettools/internal/audit\t0.387s\nok  \tnettools/internal/backup\t0.370s\n?   \tnettools/internal/db\t[no test files]\n?   \tnettools/internal/db/models\t[no test files]\nok  \tnettools/internal/diff\t0.195s\nok  \tnettools/internal/logger\t0.398s\nok  \tnettools/internal/playbook\t0.349s\nok  \tnettools/internal/porttracker\t0.348s\nok  \tnettools/internal/scheduler\t0.376s\n?   \tnettools/internal/secret\t[no test files]\nok  \tnettools/internal/snmp\t0.190s\n?   \tnettools/internal/snmp/mib\t[no test files]\n?   \tnettools/internal/ssh\t[no test files]\nok  \tnettools/internal/topology\t0.376s\n",
+  "projectFingerprint": "94c104e8431fdbdb09920e29da504191e326dc2a0d7f1472e6d6bb7c5f166b10",
+  "provenance": "sentinel-engine",
+  "integrity": {
+    "algorithm": "hmac-sha256",
+    "tag": "7647067274d1aac886ea8a5c6a79a0c53c484036d5c04eadade7bdc0a8af5762"
+  }
+}

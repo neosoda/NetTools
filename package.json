@@ -1,0 +1,9 @@
+{
+  "name": "nettools",
+  "private": true,
+  "scripts": {
+    "test": "go test ./internal/... -count=1",
+    "typecheck": "npx tsc --noEmit -p frontend/tsconfig.json",
+    "build": "wails build -m && git checkout -- frontend/dist/.keep"
+  }
+}

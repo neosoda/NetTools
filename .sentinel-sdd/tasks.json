@@ -3,7 +3,7 @@
     "id": "T-001",
     "specId": "project",
     "title": "Define the first deliverable",
-    "status": "planned",
+    "status": "done",
     "priority": "medium",
     "dependsOn": [],
     "requirements": [
@@ -18,5 +18,91 @@
     "modules": [
       "specs"
     ]
+  },
+  {
+    "id": "T-002",
+    "specId": "nettools-v1-5-improvements",
+    "title": "Enrichir le Port Tracker avec mapping d'equipement, filtre switch et export CSV",
+    "status": "done",
+    "dependsOn": [],
+    "requirements": [
+      "FR-PT-01"
+    ],
+    "acceptance": [
+      "AC-PT-01"
+    ],
+    "tests": [
+      "unit"
+    ],
+    "modules": [
+      "frontend/src/pages/PortTrackerPage.tsx"
+    ],
+    "priority": "high"
+  },
+  {
+    "id": "T-003",
+    "specId": "nettools-v1-5-improvements",
+    "title": "Synthese des backups et bouton export ZIP avec controle d integrite SHA256",
+    "status": "done",
+    "dependsOn": [
+      "T-002"
+    ],
+    "requirements": [
+      "FR-BK-01"
+    ],
+    "acceptance": [
+      "AC-BK-01"
+    ],
+    "tests": [
+      "unit"
+    ],
+    "modules": [
+      "frontend/src/pages/BackupPage.tsx"
+    ],
+    "priority": "high"
+  },
+  {
+    "id": "T-004",
+    "specId": "nettools-v1-5-improvements",
+    "title": "Assistant de diagnostic interactif SNMPv3 et test des profils USM",
+    "status": "done",
+    "dependsOn": [
+      "T-003"
+    ],
+    "requirements": [
+      "FR-SNMP-01"
+    ],
+    "acceptance": [
+      "AC-SNMP-01"
+    ],
+    "tests": [
+      "unit"
+    ],
+    "modules": [
+      "frontend/src/pages/SettingsPage.tsx"
+    ],
+    "priority": "high"
+  },
+  {
+    "id": "T-005",
+    "specId": "nettools-v1-5-improvements",
+    "title": "Compilation de production NetTools.exe et validation des livrables",
+    "status": "done",
+    "dependsOn": [
+      "T-004"
+    ],
+    "requirements": [
+      "FR-BLD-01"
+    ],
+    "acceptance": [
+      "AC-BLD-01"
+    ],
+    "tests": [
+      "build"
+    ],
+    "modules": [
+      "build"
+    ],
+    "priority": "critical"
   }
 ]
