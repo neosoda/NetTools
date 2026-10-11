@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "mode": "standard",
+  "createdAt": "2026-10-11T09:26:36.677Z",
+  "adapters": [
+    "codex",
+    "claude",
+    "antigravity"
+  ],
+  "detectedStack": [
+    "Go"
+  ]
+}

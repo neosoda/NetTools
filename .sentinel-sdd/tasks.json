@@ -1,0 +1,22 @@
+[
+  {
+    "id": "T-001",
+    "specId": "project",
+    "title": "Define the first deliverable",
+    "status": "planned",
+    "priority": "medium",
+    "dependsOn": [],
+    "requirements": [
+      "Planning"
+    ],
+    "acceptance": [
+      "Initial delivery plan reviewed"
+    ],
+    "tests": [
+      "Planning review"
+    ],
+    "modules": [
+      "specs"
+    ]
+  }
+]
