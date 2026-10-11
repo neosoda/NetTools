@@ -14,16 +14,11 @@
   "info": {
     "companyName": "neosoda",
     "productName": "NetTools",
-    "productVersion": "1.4.1",
+    "productVersion": "1.5.0",
     "copyright": "Copyright 2026 neosoda",
     "comments": "Administration réseau et audit de conformité"
   },
   "windows": {
     "icon": "build/appicon.ico"
-  },
-  "info": {
-    "productVersion": "1.5.0",
-    "productName": "NetTools",
-    "companyName": "neosoda"
   }
 }

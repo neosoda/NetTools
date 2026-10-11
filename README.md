@@ -218,9 +218,9 @@
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.4.1](../../releases/download/v1.4.1/NetTools_v1.4.1.exe)
+### [⬇️ Télécharger NetTools v1.5.0](../../releases/download/v1.5.0/NetTools.exe)
 
-**Windows 10/11 • 64-bit • ~20 MB**
+**Windows 10/11 • 64-bit • ~21 MB**
 
 </div>
 
