@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-10-11T09:59:00.555Z",
+  "updatedAt": "2026-10-11T10:01:41.112Z",
   "sessions": [
     {
       "at": "2026-10-11T09:27:25.095Z",
@@ -62,6 +62,50 @@
     {
       "at": "2026-10-11T09:59:00.555Z",
       "summary": "Version bumped to 1.5.1, release binary built and validated for publication.",
+      "taskState": [
+        {
+          "id": "T-001",
+          "status": "done"
+        },
+        {
+          "id": "T-002",
+          "status": "done"
+        },
+        {
+          "id": "T-003",
+          "status": "done"
+        },
+        {
+          "id": "T-004",
+          "status": "done"
+        },
+        {
+          "id": "T-005",
+          "status": "done"
+        }
+      ],
+      "validEvidence": [
+        "2026-10-11T09-50-45-051Z-build",
+        "2026-10-11T09-50-39-032Z-test",
+        "2026-10-11T09-50-37-504Z-test",
+        "2026-10-11T09-50-35-951Z-test",
+        "2026-10-11T09-49-37-712Z-build",
+        "2026-10-11T09-49-31-275Z-test",
+        "2026-10-11T09-49-29-363Z-test",
+        "2026-10-11T09-49-27-490Z-test",
+        "2026-10-11T09-48-45-230Z-build",
+        "2026-10-11T09-48-38-293Z-test",
+        "2026-10-11T09-48-36-654Z-test",
+        "2026-10-11T09-48-34-954Z-test",
+        "2026-10-11T09-47-49-921Z-build",
+        "2026-10-11T09-45-54-388Z-test",
+        "2026-10-11T09-43-53-262Z-test",
+        "2026-10-11T09-40-30-489Z-test"
+      ]
+    },
+    {
+      "at": "2026-10-11T10:01:41.112Z",
+      "summary": "NetTools v1.5.1 published successfully on GitHub (tag v1.5.1, release asset NetTools.exe attached with SHA256 BA3E221FE012B8C8A19E11D122ABA92A3B0D2FF44F65FCAF0821BAC852F73225).",
       "taskState": [
         {
           "id": "T-001",
