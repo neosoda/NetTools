@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"nettools/internal/db"
 	"nettools/internal/db/models"
+	"nettools/internal/logger"
 	"nettools/internal/ssh"
 
 	"github.com/google/uuid"
@@ -76,6 +78,19 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 		Status:     "failed",
 	}
 
+	// Correlate all phases by backup ID; do not log credentials, commands,
+	// endpoint names, configuration text or untrusted remote error strings.
+	trace := func(d ssh.Diagnostic) {
+		record := struct {
+			BackupID string `json:"backup_id"`
+			ssh.Diagnostic
+		}{backup.ID, d}
+		data, _ := json.Marshal(record)
+		logger.Info("ssh_backup " + string(data))
+	}
+	defer func() {
+		trace(ssh.Diagnostic{Stage: "backup", Reason: backup.Status, ElapsedMs: time.Since(start).Milliseconds(), Bytes: int(backup.FileSizeBytes)})
+	}()
 	vendor := strings.ToLower(req.Device.Vendor)
 	if vendor == "" {
 		vendor = "unknown"
@@ -91,6 +106,7 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 		PrivateKey: req.PrivateKey,
 		Vendor:     vendor,
 		Timeout:    60 * time.Second,
+		Diagnostic: trace,
 	}
 
 	sess, err := ssh.Connect(ctx, params)
@@ -107,6 +123,9 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 	// interactive fallback also fail. Go straight to interactive for Aruba.
 	// (Source: Netmiko, ntc-ansible, Aruba Ansible collections all confirm this.)
 	useInteractive := vendor == "aruba"
+	if useInteractive {
+		trace(ssh.Diagnostic{Stage: "strategy", Reason: "vendor_interactive"})
+	}
 
 	var output string
 
@@ -117,14 +136,20 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 		// Some devices return exec rejection as stdout text with exit code 0.
 		if err == nil && isExecRejectedOutput(output) {
 			useInteractive = true
+			trace(ssh.Diagnostic{Stage: "fallback", Reason: "exec_rejected_text", Bytes: len(output)})
 		} else if err != nil || len(strings.TrimSpace(output)) < 10 {
 			useInteractive = true
+			reason := "exec_short_output"
+			if err != nil {
+				reason = "exec_error"
+			}
+			trace(ssh.Diagnostic{Stage: "fallback", Reason: reason, Bytes: len(output)})
 		}
 	}
 
 	if useInteractive {
 		// Strategy 2: interactive shell with PTY — handles pagination, banners, prompts.
-		output, err = sess.RunCommandInteractive(ctx, command)
+		output, err = sess.RunBackupInteractive(ctx, command)
 		if err != nil {
 			backup.ErrorMessage = err.Error()
 			backup.DurationMs = time.Since(start).Milliseconds()
@@ -133,21 +158,33 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 		}
 	}
 
+	trace(ssh.Diagnostic{Stage: "retrieval", Reason: "returned", Bytes: len(output)})
+	// Preserve a rejected CLI response as a failure before cleanup removes it.
+	if isExecRejectedOutput(output) {
+		trace(ssh.Diagnostic{Stage: "validation", Reason: "cli_rejected"})
+		backup.ErrorMessage = "SSH backup command rejected by device CLI; see ssh_backup trace " + backup.ID
+		backup.DurationMs = time.Since(start).Milliseconds()
+		db.DB.Create(backup)
+		return backup, fmt.Errorf("%s", backup.ErrorMessage)
+	}
 	// Deep-clean the output: remove any remaining ANSI/control artifacts
 	output = deepCleanConfig(output)
+	trace(ssh.Diagnostic{Stage: "clean", Reason: "completed", Bytes: len(output)})
 
 	// Extract only the configuration content (strip command echo, prompts, preamble).
 	// fromExec=true skips the command-echo search (exec output has no echo/preamble).
 	output = extractConfigContent(output, command, !useInteractive)
+	trace(ssh.Diagnostic{Stage: "extract", Reason: "completed", Bytes: len(output)})
 
 	// Validate output is not empty or too short
 	if len(strings.TrimSpace(output)) < 10 {
-		backup.ErrorMessage = "backup output is empty or too short"
+		backup.ErrorMessage = fmt.Sprintf("backup validation: output empty or too short after extraction (%d bytes); see ssh_backup trace %s", len(output), backup.ID)
 		backup.DurationMs = time.Since(start).Milliseconds()
 		db.DB.Create(backup)
-		return backup, fmt.Errorf("backup output is empty or too short for %s", req.Device.IP)
+		return backup, fmt.Errorf("%s", backup.ErrorMessage)
 	}
 
+	trace(ssh.Diagnostic{Stage: "validation", Reason: "accepted", Bytes: len(output)})
 	// Save to disk with Windows-safe filename
 	filename := m.buildFilename(req.Device, req.ConfigType)
 	filePath := filepath.Join(m.backupDir, filename)
@@ -157,13 +194,16 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 		filePath = ensureWindowsLongPath(filePath)
 	}
 
+	trace(ssh.Diagnostic{Stage: "write_file", Reason: "started", Bytes: len(output)})
 	if err := os.WriteFile(filePath, []byte(output), 0600); err != nil {
+		trace(ssh.Diagnostic{Stage: "write_file", Reason: "failed", ErrorClass: "local_file_error"})
 		backup.ErrorMessage = fmt.Sprintf("write file: %v", err)
 		backup.DurationMs = time.Since(start).Milliseconds()
 		db.DB.Create(backup)
 		return backup, err
 	}
 
+	trace(ssh.Diagnostic{Stage: "write_file", Reason: "completed", Bytes: len(output)})
 	// Compute hash
 	hash := sha256Sum([]byte(output))
 

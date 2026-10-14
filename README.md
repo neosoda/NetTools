@@ -6,7 +6,7 @@
 
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
-[![GitHub release](https://img.shields.io/badge/Version-1.5.1-blue?logo=github)](../../releases)
+[![GitHub release](https://img.shields.io/badge/Version-1.5.2-blue?logo=github)](../../releases)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
 [![Go Version](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -214,11 +214,19 @@
 
 ---
 
+## Correctifs SSH de la version 1.5.2
+
+Les backups Allied conservent exec sans PTY en premier. Si un repli interactif est nécessaire et que la session ouvre un prompt `>`, NetTools passe par `enable` et vérifie le prompt privilégié `#` avant la récupération. Aucun mode de configuration n'est ouvert.
+
+La lecture attend la réponse propre à la commande et son prompt final. La pagination est acquittée une seule fois par occurrence. Les erreurs CLI, timeouts et annulations sont remontés avec des diagnostics sans secrets ni contenu de configuration.
+
+Voir les [notes de release 1.5.2](RELEASE_NOTES_v1.5.2.md) et le [rapport de validation SSH](specs/ssh-fix-validation.md).
+
 ## 📥 Téléchargement
 
 <div align="center">
 
-### [⬇️ Télécharger NetTools v1.5.1](../../releases/download/v1.5.1/NetTools.exe)
+### [⬇️ Télécharger NetTools v1.5.2](../../releases/download/v1.5.2/NetTools-v1.5.2.exe)
 
 **Windows 10/11 • 64-bit • ~21 MB**
 
@@ -226,7 +234,7 @@
 
 ### Installation
 
-1. Téléchargez `NetTools.exe` depuis la [page Releases](../../releases)
+1. Téléchargez `NetTools-v1.5.2.exe` depuis la [page Releases](../../releases)
 2. Double-cliquez sur l'exécutable
 3. L'application crée automatiquement ses dossiers de données dans :
    ```
@@ -333,7 +341,7 @@ nettools/
 │
 ├── 📁 build/
 │   └── bin/
-│       └── NetTools.exe           # Binaire production
+│       └── NetTools-v1.5.2.exe           # Binaire production
 │
 ├── 📄 go.mod                      # Dépendances Go
 ├── 📄 wails.json                  # Configuration Wails
@@ -375,7 +383,7 @@ L'application se lance avec accès aux DevTools (F12).
 wails build
 ```
 
-Binaire généré : `build/bin/NetTools.exe`
+Binaire généré : `build/bin/NetTools-v1.5.2.exe`
 
 ### Tests
 

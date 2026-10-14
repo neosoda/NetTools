@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "nettools",
-  "outputfilename": "NetTools",
+  "outputfilename": "NetTools-v1.5.2",
   "icon": "build/appicon.ico",
   "frontend:install": "npm install --legacy-peer-deps",
   "frontend:build": "npm run build",
@@ -14,7 +14,7 @@
   "info": {
     "companyName": "neosoda",
     "productName": "NetTools",
-    "productVersion": "1.5.1",
+    "productVersion": "1.5.2",
     "copyright": "Copyright 2026 neosoda",
     "comments": "Administration réseau et audit de conformité"
   },
