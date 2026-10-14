@@ -6,6 +6,25 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.5.2] - 2026-10-14
+
+### Corrigé
+- **Backups Allied Telesis** : passage au mode privilégié `#` par `enable` dans le repli interactif lorsqu'une session démarre au prompt `>` ; erreur explicite si ce passage est refusé ou nécessite une authentification supplémentaire.
+- **Lecture SSH** : réponse délimitée par commande, prompt appris pour les backups, suppression des fins prématurées sur marqueur ou silence et traitement des fermetures de canal.
+- **Pagination Allied** : prise en charge de `--More--`, `<cr>` et `Press any key` en dernière ligne de terminal ; un acquittement par occurrence, sans réagir aux tokens contenus dans les lignes de configuration.
+- **Erreurs SSH** : propagation des erreurs d'écriture, annulations et limites ; attente exec bornée ; traitement d'une fermeture propre sans statut distant ; erreurs CLI détectées avant nettoyage.
+- **Sortie terminal** : conservation des séparateurs CR-only et reconnaissance des prompts après nettoyage ANSI.
+
+### Ajouts
+- Diagnostics de récupération corrélés par backup, sans secrets ni contenu de configuration.
+- Analyse de l'historique SSH, tests de non-régression et utilitaire isolé de diagnostic en lecture seule.
+
+### Validation
+- Tests Go, contrôles statiques et compilation Windows de production.
+- Récupération SSH vérifiée sur deux switches Allied, avec exec et le repli interactif corrigé. Ces essais ne valident pas tous les modèles/firmwares ni tous les échecs historiques.
+
+---
+
 ## [1.5.1] - 2026-10-11
 
 ### Ajouts

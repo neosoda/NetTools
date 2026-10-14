@@ -1143,6 +1143,12 @@ Pour les développeurs étendant l'application, les événements Wails émis :
 → Vérifier que la pagination est bien désactivée (pas de "--- More ---" dans le backup)
 ```
 
+**Symptôme :** Allied connecté en SSH, mais `show running-config` rejeté
+
+Depuis la version 1.5.2, le repli des backups Allied vérifie le mode privilégié : si le prompt initial est `>`, NetTools envoie `enable` et attend `#`. Cette préparation ne modifie pas la configuration. Si l'équipement exige un mot de passe enable supplémentaire, le backup signale que le prompt privilégié est indisponible ; aucun mot de passe n'est deviné.
+
+**Diagnostic SSH :** rechercher `ssh_backup` et l'identifiant du backup dans `%APPDATA%\NetTools\logs\nettools-YYYY-MM.log`. Les événements indiquent le chemin exec/shell, le niveau du prompt, les volumes, la pagination, les délais et les catégories d'erreur. Ne transmettre que ces événements, sans configuration ni secret. Voir [le rapport SSH](specs/ssh-fix-validation.md).
+
 ### Problèmes SNMP
 
 **Symptôme :** Scan ne trouve aucun équipement
