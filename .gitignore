@@ -12,3 +12,5 @@ frontend/node_modules/
 build/ 
 OLD/ 
 *.md5 
+.serena/
+tmp/

@@ -21,9 +21,13 @@ type Device struct {
 	SSHPort        int       `json:"ssh_port" gorm:"default:22"`
 	CredentialID   string    `json:"credential_id"`
 	Description    string    `json:"description"`
-	LastSeenAt     *time.Time `json:"last_seen_at"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	// LastSeenAt is the date of the last successful SNMP discovery. It is not a
+	// reachability indicator outside of that scan.
+	LastSeenAt              *time.Time `json:"last_seen_at"`
+	LastConnectivityCheckAt *time.Time `json:"last_connectivity_check_at"`
+	ConnectivityStatus      string     `json:"connectivity_status"` // unknown|reachable|unreachable
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
 }
 
 type Credential struct {
@@ -65,7 +69,7 @@ type Backup struct {
 	FilePath     string    `json:"file_path"`
 	FileSizeBytes int64    `json:"file_size_bytes"`
 	SHA256Hash   string    `json:"sha256_hash"`
-	Status       string    `json:"status"` // success|failed
+	Status       string    `json:"status"` // success|suspect|failed
 	DurationMs   int64     `json:"duration_ms"`
 	ErrorMessage string    `json:"error_message"`
 	Content      string    `json:"content,omitempty" gorm:"-"` // transient
@@ -149,41 +153,3 @@ type PlaybookExecution struct {
 // DeviceLink represents a physical link discovered via LLDP between two devices.
 // LocalDeviceID is always a known device in the DB.
 // RemoteDeviceID is set when the remote endpoint is also known in the DB (empty otherwise).
-type DeviceLink struct {
-	ID               string    `json:"id" gorm:"primaryKey"`
-	LocalDeviceID    string    `json:"local_device_id" gorm:"index;not null"`
-	LocalPort        string    `json:"local_port"`         // ex: "GigabitEthernet1/0/1"
-	RemoteDeviceID   string    `json:"remote_device_id" gorm:"index"` // empty if remote not in DB
-	RemoteChassisMAC string    `json:"remote_chassis_mac"`
-	RemotePort       string    `json:"remote_port"`        // ex: "GigabitEthernet2/0/24"
-	RemoteSysName    string    `json:"remote_sys_name"`
-	LinkType         string    `json:"link_type"`          // "trunk"|"access"|"unknown"
-	UpdatedAt        time.Time `json:"updated_at"`
-}
-
-type PortState struct {
-	ID                 string     `json:"id" gorm:"primaryKey"`
-	DeviceID           string     `json:"device_id" gorm:"uniqueIndex:idx_device_port;not null"`
-	IfIndex            int        `json:"if_index" gorm:"uniqueIndex:idx_device_port"`
-	IfName             string     `json:"if_name"`
-	IfAlias            string     `json:"if_alias"`
-	IfType             int        `json:"if_type"`
-	AdminStatus        int        `json:"admin_status"`
-	OperStatus         int        `json:"oper_status"`
-	SpeedMbps          int64      `json:"speed_mbps"`
-	FirstSeenAt        time.Time  `json:"first_seen_at"`
-	LastSeenAt         time.Time  `json:"last_seen_at"`
-	LastUpAt           *time.Time `json:"last_up_at"`
-	LastDownAt         *time.Time `json:"last_down_at"`
-	LastStatusChangeAt *time.Time `json:"last_status_change_at"`
-	UpTransitions      int64      `json:"up_transitions"`
-	DownTransitions    int64      `json:"down_transitions"`
-	LastMAC            string     `json:"last_mac"`
-	LastMACSeenAt      *time.Time `json:"last_mac_seen_at"`
-	HasLLDPNeighbor    bool       `json:"has_lldp_neighbor"`
-	Classification     string     `json:"classification"`
-	Confidence         int        `json:"confidence"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
-}
-

@@ -3,14 +3,11 @@
 import {diff} from '../models';
 import {main} from '../models';
 import {models} from '../models';
-import {topology} from '../models';
 import {audit} from '../models';
 import {playbook} from '../models';
 import {ssh} from '../models';
 
 export function ClearInventory():Promise<void>;
-
-export function CollectLLDP():Promise<void>;
 
 export function CompareBackups(arg1:string,arg2:string):Promise<diff.DiffResult>;
 
@@ -36,8 +33,6 @@ export function ExportScanToExcel(arg1:Array<string>):Promise<string>;
 
 export function GetAllBackups():Promise<Array<models.Backup>>;
 
-export function GetAllPortStates():Promise<Array<models.PortState>>;
-
 export function GetAuditLogs(arg1:main.AuditLogQuery):Promise<Array<models.AuditLog>>;
 
 export function GetAuditRules():Promise<Array<models.AuditRule>>;
@@ -62,13 +57,9 @@ export function GetLogFiles():Promise<Array<string>>;
 
 export function GetPlaybooks():Promise<Array<models.Playbook>>;
 
-export function GetPortStates(arg1:string):Promise<Array<models.PortState>>;
-
 export function GetScheduledJobs():Promise<Array<models.ScheduledJob>>;
 
 export function GetSettings():Promise<main.AppSettings>;
-
-export function GetTopology():Promise<topology.Graph>;
 
 export function ImportInventoryJSON():Promise<number>;
 
@@ -79,8 +70,6 @@ export function RunAuditFiltered(arg1:Array<string>,arg2:Array<string>):Promise<
 export function RunBackup(arg1:main.BackupRequest):Promise<Array<models.Backup>>;
 
 export function RunPlaybook(arg1:main.PlaybookRunRequest):Promise<Array<playbook.ExecutionResult>>;
-
-export function RunPortTrackerScan(arg1:Array<string>):Promise<void>;
 
 export function RunSSHCommands(arg1:main.SSHCommandRequest):Promise<Array<ssh.Result>>;
 

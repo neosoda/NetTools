@@ -157,6 +157,7 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 			return backup, err
 		}
 	}
+	rawOutput := output
 
 	trace(ssh.Diagnostic{Stage: "retrieval", Reason: "returned", Bytes: len(output)})
 	// Preserve a rejected CLI response as a failure before cleanup removes it.
@@ -176,12 +177,16 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 	output = extractConfigContent(output, command, !useInteractive)
 	trace(ssh.Diagnostic{Stage: "extract", Reason: "completed", Bytes: len(output)})
 
-	// Validate output is not empty or too short
-	if len(strings.TrimSpace(output)) < 10 {
-		backup.ErrorMessage = fmt.Sprintf("backup validation: output empty or too short after extraction (%d bytes); see ssh_backup trace %s", len(output), backup.ID)
+	validation := validateCapture(rawOutput, output)
+	if validation.status == "failed" {
+		backup.ErrorMessage = validation.detail
 		backup.DurationMs = time.Since(start).Milliseconds()
 		db.DB.Create(backup)
-		return backup, fmt.Errorf("%s", backup.ErrorMessage)
+		return backup, fmt.Errorf("%s for %s", validation.detail, req.Device.IP)
+	}
+	if previousSize := m.lastSuccessfulBackupSize(req.Device.ID, req.ConfigType); previousSize > 0 && int64(len(output))*4 < previousSize {
+		validation.status = "suspect"
+		validation.detail = fmt.Sprintf("capture is much smaller than the last validated backup (%d bytes vs %d bytes)", len(output), previousSize)
 	}
 
 	trace(ssh.Diagnostic{Stage: "validation", Reason: "accepted", Bytes: len(output)})
@@ -210,11 +215,37 @@ func (m *Manager) Run(ctx context.Context, req BackupRequest) (*models.Backup, e
 	backup.FilePath = filePath
 	backup.FileSizeBytes = int64(len(output))
 	backup.SHA256Hash = hash
-	backup.Status = "success"
+	backup.Status = validation.status
+	backup.ErrorMessage = validation.detail
 	backup.DurationMs = time.Since(start).Milliseconds()
 
 	db.DB.Create(backup)
 	return backup, nil
+}
+
+type captureValidation struct {
+	status string
+	detail string
+}
+
+var cliErrorOutputRe = regexp.MustCompile(`(?im)^\s*(?:%\s*(?:invalid|ambiguous|incomplete|unknown|error)|\^\s*$|(?:error|failed|permission denied|access denied|command not found)\b)`)
+
+func validateCapture(rawOutput, content string) captureValidation {
+	if len(strings.TrimSpace(content)) < 10 {
+		return captureValidation{status: "failed", detail: "backup output is empty or too short"}
+	}
+	if cliErrorOutputRe.MatchString(rawOutput) {
+		return captureValidation{status: "suspect", detail: "capture contains CLI error output"}
+	}
+	return captureValidation{status: "success"}
+}
+
+func (m *Manager) lastSuccessfulBackupSize(deviceID, configType string) int64 {
+	var previous models.Backup
+	if err := db.DB.Where("device_id = ? AND config_type = ? AND status = ? AND file_size_bytes > 0", deviceID, configType, "success").Order("created_at DESC").First(&previous).Error; err != nil {
+		return 0
+	}
+	return previous.FileSizeBytes
 }
 
 // RunConcurrent performs backups on multiple devices concurrently

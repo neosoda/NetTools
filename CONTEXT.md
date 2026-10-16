@@ -53,7 +53,6 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 - Audit: `internal/audit`, règles regex stockées en base, seed initial et migrations applicatives simples.
 - Diff: `internal/diff`, comparaison de configurations et export HTML.
 - Scheduler: `internal/scheduler`, cron local en mémoire, jobs persistés en base.
-- Topologie: `internal/topology`, graphe construit depuis devices et liens LLDP.
 - Logging: `internal/logger`, zerolog vers stdout, fichiers mensuels et table `audit_logs`.
 - Pattern assumé: façade applicative Wails dans `app.go`, logique isolée autant que possible dans `internal/*`.
 - Volontairement simple: pas de backend HTTP, pas de service distant, pas d'authentification multi-utilisateur, pas de migration SQL sophistiquée.

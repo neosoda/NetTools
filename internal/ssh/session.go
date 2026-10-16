@@ -14,6 +14,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// ErrCommandCompletionUncertain indicates that a shell stopped producing data
+// before a terminal prompt confirmed command completion.
+var ErrCommandCompletionUncertain = errors.New("SSH command completion is uncertain")
+
 // safeBuffer is a thread-safe buffer for concurrent SSH reads and goroutine reads
 type safeBuffer struct {
 	mu          sync.Mutex

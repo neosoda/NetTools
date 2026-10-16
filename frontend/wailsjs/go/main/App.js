@@ -6,10 +6,6 @@ export function ClearInventory() {
   return window['go']['main']['App']['ClearInventory']();
 }
 
-export function CollectLLDP() {
-  return window['go']['main']['App']['CollectLLDP']();
-}
-
 export function CompareBackups(arg1, arg2) {
   return window['go']['main']['App']['CompareBackups'](arg1, arg2);
 }
@@ -56,10 +52,6 @@ export function ExportScanToExcel(arg1) {
 
 export function GetAllBackups() {
   return window['go']['main']['App']['GetAllBackups']();
-}
-
-export function GetAllPortStates() {
-  return window['go']['main']['App']['GetAllPortStates']();
 }
 
 export function GetAuditLogs(arg1) {
@@ -110,20 +102,12 @@ export function GetPlaybooks() {
   return window['go']['main']['App']['GetPlaybooks']();
 }
 
-export function GetPortStates(arg1) {
-  return window['go']['main']['App']['GetPortStates'](arg1);
-}
-
 export function GetScheduledJobs() {
   return window['go']['main']['App']['GetScheduledJobs']();
 }
 
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
-}
-
-export function GetTopology() {
-  return window['go']['main']['App']['GetTopology']();
 }
 
 export function ImportInventoryJSON() {
@@ -144,10 +128,6 @@ export function RunBackup(arg1) {
 
 export function RunPlaybook(arg1) {
   return window['go']['main']['App']['RunPlaybook'](arg1);
-}
-
-export function RunPortTrackerScan(arg1) {
-  return window['go']['main']['App']['RunPortTrackerScan'](arg1);
 }
 
 export function RunSSHCommands(arg1) {

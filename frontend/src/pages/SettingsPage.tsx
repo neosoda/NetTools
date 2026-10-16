@@ -129,6 +129,18 @@ export default function SettingsPage() {
             </div>
             <div className="relative z-10 space-y-5">
               <Input label="Répertoire de backups" value={settings.backup_dir} onChange={e => setSettings((s: any) => ({ ...s, backup_dir: e.target.value }))} />
+              <label className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.ephemeral_inventory)}
+                  onChange={e => setSettings((s: any) => ({ ...s, ephemeral_inventory: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4 accent-amber-400"
+                />
+                <span>
+                  <span className="block font-medium text-slate-200">Réinitialiser l’inventaire à chaque démarrage</span>
+                  <span className="text-xs text-slate-500">Désactivé par défaut : l’inventaire est conservé entre les sessions. Activez-le seulement pour un poste éphémère.</span>
+                </span>
+              </label>
               <div className="pt-2">
                 <Button variant="primary" loading={saveMutation.isPending} onClick={() => saveMutation.mutate(settings)} className="px-6 shadow-blue-500/25">
                   <Save className="w-4 h-4" /> Sauvegarder les paramètres

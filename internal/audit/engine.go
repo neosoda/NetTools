@@ -28,16 +28,18 @@ type AuditRequest struct {
 }
 
 type AuditReport struct {
-	DeviceID      string              `json:"device_id"`
-	DeviceIP      string              `json:"device_ip"`
-	DeviceHost    string              `json:"device_hostname"`
-	TotalRules    int                 `json:"total_rules"`
-	Passed        int                 `json:"passed"`
-	Failed        int                 `json:"failed"`
-	Score         float64             `json:"score"`
-	Results       []models.AuditResult `json:"results"`
-	Remediation   string              `json:"remediation"`
-	CreatedAt     time.Time           `json:"created_at"`
+	DeviceID     string               `json:"device_id"`
+	DeviceIP     string               `json:"device_ip"`
+	DeviceHost   string               `json:"device_hostname"`
+	Status       string               `json:"status"`
+	ErrorMessage string               `json:"error_message"`
+	TotalRules   int                  `json:"total_rules"`
+	Passed       int                  `json:"passed"`
+	Failed       int                  `json:"failed"`
+	Score        float64              `json:"score"`
+	Results      []models.AuditResult `json:"results"`
+	Remediation  string               `json:"remediation"`
+	CreatedAt    time.Time            `json:"created_at"`
 }
 
 // Run executes audit rules against a device config
@@ -57,6 +59,7 @@ func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error
 		DeviceID:   req.Device.ID,
 		DeviceIP:   req.Device.IP,
 		DeviceHost: req.Device.Hostname,
+		Status:     "success",
 		TotalRules: len(rules),
 		CreatedAt:  time.Now(),
 	}

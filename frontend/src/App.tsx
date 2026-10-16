@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Network, DatabaseBackup, GitCompare, ShieldCheck,
-  Terminal, CalendarClock, GitGraph, ScrollText, Settings, Activity, Square, KeyRound, Package
+  Terminal, CalendarClock, ScrollText, Settings, Square, KeyRound, Package
 } from 'lucide-react'
 import { cn } from './lib/utils'
 import logo from './assets/images/logo.png'
@@ -18,11 +18,9 @@ import DiffPage from './pages/DiffPage'
 import AuditPage from './pages/AuditPage'
 import PlaybookPage from './pages/PlaybookPage'
 import SchedulerPage from './pages/SchedulerPage'
-import TopologyPage from './pages/TopologyPage'
 import LogsPage from './pages/LogsPage'
 import SettingsPage from './pages/SettingsPage'
 import InventoryPage from './pages/InventoryPage'
-import PortTrackerPage from './pages/PortTrackerPage'
 const navItems = [
   { to: '/scan', icon: Network, label: 'Découverte' },
   { to: '/inventory', icon: Package, label: 'Inventaire' },
@@ -31,8 +29,6 @@ const navItems = [
   { to: '/audit', icon: ShieldCheck, label: 'Audit' },
   { to: '/playbook', icon: Terminal, label: 'Playbooks' },
   { to: '/scheduler', icon: CalendarClock, label: 'Planificateur' },
-  { to: '/topology', icon: GitGraph, label: 'Topologie' },
-  { to: '/porttracker', icon: Activity, label: 'Utilisation Ports' },
   { to: '/logs', icon: ScrollText, label: 'Journaux' },
   { to: '/settings', icon: Settings, label: 'Paramètres' },
 ]
@@ -186,8 +182,6 @@ function AppContent() {
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/playbook" element={<PlaybookPage />} />
             <Route path="/scheduler" element={<SchedulerPage />} />
-            <Route path="/topology" element={<TopologyPage />} />
-            <Route path="/porttracker" element={<PortTrackerPage />} />
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

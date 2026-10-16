@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Play, Eye, Terminal, RefreshCw, Send, Clock, Archive, ShieldCheck } from 'lucide-react'
+import { useLocation } from 'react-router'
+import { AlertTriangle, Play, Eye, Terminal, RefreshCw, Send, Clock } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Select from '../components/Select'
 import Input from '../components/Input'
+import DeviceSelector, { DeviceSelection, DeviceSource } from '../components/DeviceSelector'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import { formatDate, formatBytes } from '../lib/utils'
@@ -12,16 +14,15 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useGlobalCredential } from '../context/CredentialContext'
 import { getBackend } from '../lib/backend'
 
-type DeviceSource = 'last_scan' | 'manual'
-
 export default function BackupPage() {
   const { globalCredId } = useGlobalCredential()
-
-  // Source des équipements
-  const [deviceSource, setDeviceSource] = useState<DeviceSource>('manual')
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([])
-  const [lastScanDevices, setLastScanDevices] = useState<any[]>([])
-  const [manualIpText, setManualIpText] = useState('')
+  const location = useLocation()
+  const handoff = location.state as { deviceIds?: string[], source?: DeviceSource } | null
+  const [selection, setSelection] = useState<DeviceSelection>(() => ({
+    source: handoff?.source || 'manual',
+    deviceIds: [...new Set(handoff?.deviceIds || [])],
+    manualIPs: [],
+  }))
 
   // Config
   const [configType, setConfigType] = useState('running')
@@ -57,18 +58,6 @@ export default function BackupPage() {
     queryFn: async () => { const m = await getBackend(); return m.GetBackups(selectedDevice) },
   })
 
-  // Load last scan devices when source changes
-  useEffect(() => {
-    if (deviceSource === 'last_scan') {
-      getBackend().then(m => m.GetLastScanDevices()).then(devs => {
-        setLastScanDevices(devs || [])
-        setSelectedDevices((devs || []).map((d: any) => d.id))
-      })
-    } else {
-      setSelectedDevices([])
-    }
-  }, [deviceSource])
-
   // Completion summary
   const [backupSummary, setBackupSummary] = useState<any>(null)
 
@@ -98,17 +87,14 @@ export default function BackupPage() {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [terminalLines])
 
-  const devices = deviceSource === 'last_scan' ? lastScanDevices : []
-
   const backupMutation = useMutation({
     mutationFn: async () => {
       const m = await getBackend()
       setBackupProgress({})
-      if (deviceSource === 'manual') {
-        const ipList = manualIpText.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean)
+      if (selection.source === 'manual') {
         return m.RunBackup({
           device_ids: [],
-          ip_list: ipList,
+          ip_list: selection.manualIPs,
           config_type: configType,
           credential_id: globalCredId,
           username: globalCredId ? '' : inlineUsername,
@@ -116,7 +102,7 @@ export default function BackupPage() {
         })
       }
       return m.RunBackup({
-        device_ids: selectedDevices,
+        device_ids: selection.deviceIds,
         ip_list: [],
         config_type: configType,
         credential_id: globalCredId,
@@ -164,16 +150,13 @@ export default function BackupPage() {
     { value: 'startup', label: 'Startup config' },
   ]
 
-  const toggleDevice = (id: string) =>
-    setSelectedDevices(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-
   const terminalDeviceLabel = (knownDevices as any[]).find((d: any) => d.id === terminalDevice)
 
   const hasCredential = !!globalCredId || (inlineUsername.trim().length > 0 && inlinePassword.trim().length > 0)
   const canLaunch = hasCredential && (
-    deviceSource === 'manual'
-      ? manualIpText.trim().length > 0
-      : selectedDevices.length > 0
+    selection.source === 'manual'
+      ? selection.manualIPs.length > 0
+      : selection.deviceIds.length > 0
   )
 
   const handleExportZip = async () => {
@@ -216,14 +199,6 @@ export default function BackupPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
               Lancer un backup
             </h2>
-            <div className="flex bg-slate-950/50 rounded-xl p-1 border border-white/[0.02]">
-              {(['manual', 'last_scan'] as DeviceSource[]).map(mode => (
-                <button key={mode} onClick={() => setDeviceSource(mode)}
-                  className={`flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${deviceSource === mode ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-400 hover:text-slate-200'}`}>
-                  {mode === 'manual' ? 'Saisie manuelle' : 'Dernier scan'}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end relative z-10 mb-4">
@@ -248,52 +223,10 @@ export default function BackupPage() {
             )}
           </div>
 
-          {/* Manual IP input */}
-          {deviceSource === 'manual' && (
-            <div className="space-y-2 relative z-10 w-full mb-4">
-              <label className="text-xs font-semibold text-slate-300 tracking-wide block">
-                Liste d'IPs cibles (une par ligne ou séparées par virgule)
-              </label>
-              <textarea value={manualIpText} onChange={e => setManualIpText(e.target.value)}
-                placeholder={"192.168.1.1\n192.168.1.2\n192.168.1.3"}
-                className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl p-4 text-xs font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 hover:border-slate-600 transition-all duration-200 resize-none shadow-inner"
-                rows={4} />
-            </div>
-          )}
-
-          {/* Last scan device list */}
-          {deviceSource === 'last_scan' && (
-            <div className="relative z-10 mb-4 pb-2 border-b border-white/[0.04]">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-slate-300 tracking-wide">
-                  Sélection des équipements ({selectedDevices.length}/{devices.length})
-                </p>
-                <button onClick={() => setSelectedDevices(selectedDevices.length === devices.length ? [] : devices.map((d: any) => d.id))}
-                  className="text-xs text-blue-400 font-medium hover:text-blue-300 transition-colors uppercase tracking-wider">
-                  {selectedDevices.length === devices.length ? 'Désélectionner Tout' : 'Sélectionner Tout'}
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
-                {devices.map((d: any) => {
-                  const prog = backupProgress[d.id]
-                  return (
-                    <button key={d.id} onClick={() => toggleDevice(d.id)}
-                      className={`relative px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 shadow-sm ${selectedDevices.includes(d.id)
-                        ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                        : 'bg-slate-900 border-slate-700/60 text-slate-400 hover:bg-slate-800'}`}>
-                      {d.hostname || d.ip}
-                      {prog?.status === 'running' && <RefreshCw className="inline w-3 h-3 ml-1.5 animate-spin" />}
-                      {prog?.status === 'success' && <span className="ml-1.5 text-emerald-400 font-bold">✓</span>}
-                      {prog?.status === 'failed' && <span className="ml-1.5 text-red-400 font-bold">✗</span>}
-                    </button>
-                  )
-                })}
-                {devices.length === 0 && (
-                  <p className="text-xs font-medium text-amber-500 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">Aucun scan récent. Lancez d'abord une découverte réseau sur la page Scan.</p>
-                )}
-              </div>
-            </div>
-          )}
+          <div className="relative z-10 mb-4 border-b border-white/[0.04] pb-4">
+            <DeviceSelector value={selection} onChange={setSelection}
+              manualDescription="Les adresses saisies seront sauvegardées sans modifier l’inventaire." />
+          </div>
 
           <div className="relative z-10 flex pt-2">
             <Button variant="primary" loading={backupMutation.isPending} className="shadow-blue-500/25 px-8"
@@ -306,7 +239,7 @@ export default function BackupPage() {
           {backupMutation.isPending && Object.keys(backupProgress).length > 0 && (() => {
             const entries = Object.values(backupProgress) as any[]
             const total = entries[0]?.total || entries.length
-            const done = entries.filter((p: any) => p.status === 'success' || p.status === 'failed').length
+            const done = entries.filter((p: any) => p.status === 'success' || p.status === 'suspect' || p.status === 'failed').length
             const pct = total > 0 ? Math.round(done * 100 / total) : 0
             return (
               <div className="space-y-1">
@@ -326,6 +259,7 @@ export default function BackupPage() {
             <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs">
               <span className="text-slate-300">Termine:</span>
               <span className="text-green-400">{backupSummary.success} succes</span>
+              {backupSummary.suspect > 0 && <span className="text-amber-300">{backupSummary.suspect} à vérifier</span>}
               {backupSummary.failed > 0 && <span className="text-red-400">{backupSummary.failed} echecs</span>}
               <span className="text-slate-500">{backupSummary.duration}ms</span>
             </div>
@@ -335,18 +269,20 @@ export default function BackupPage() {
           {Object.keys(backupProgress).length > 0 && (
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800">
               {Object.entries(backupProgress).map(([id, prog]: any) => {
-                const dev = devices.find((d: any) => d.id === id)
+                const dev = (knownDevices as any[]).find((d: any) => d.id === id)
                 const label = dev?.hostname || dev?.ip || prog.device_ip || id
                 return (
                   <div key={id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs border ${
                     prog.status === 'success' ? 'bg-green-900/20 border-green-800' :
+                    prog.status === 'suspect' ? 'bg-amber-900/20 border-amber-700' :
                     prog.status === 'failed' ? 'bg-red-900/20 border-red-800' :
                     'bg-slate-800 border-slate-700'}`}>
                     {prog.status === 'running' && <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />}
                     {prog.status === 'success' && <span className="text-green-400">✓</span>}
+                    {prog.status === 'suspect' && <AlertTriangle className="w-3 h-3 text-amber-300" aria-label="Sauvegarde à vérifier" />}
                     {prog.status === 'failed' && <span className="text-red-400">✗</span>}
                     <span className="truncate text-slate-300">{label}</span>
-                    {prog.error && <span className="text-red-400 truncate ml-1" title={prog.error}>⚠</span>}
+                    {prog.error && <span className={`${prog.status === 'suspect' ? 'text-amber-300' : 'text-red-400'} truncate ml-1`} title={prog.error}>⚠</span>}
                   </div>
                 )
               })}
@@ -428,7 +364,7 @@ export default function BackupPage() {
                       <td className="py-3 px-5 text-slate-400 font-mono text-xs">{b.config_type}</td>
                       <td className="py-3 px-5">
                         <StatusBadge status={b.status} />
-                        {b.error_message && <p className="text-[10px] text-red-400 mt-1 max-w-[200px] truncate" title={b.error_message}>{b.error_message}</p>}
+                        {b.error_message && <p className={`text-[10px] mt-1 max-w-[200px] truncate ${b.status === 'suspect' ? 'text-amber-300' : 'text-red-400'}`} title={b.error_message}>{b.error_message}</p>}
                       </td>
                       <td className="py-3 px-5 text-slate-400 font-mono text-xs">
                         {b.sha256_hash ? (
@@ -443,8 +379,8 @@ export default function BackupPage() {
                       <td className="py-3 px-5 text-slate-400 font-mono text-xs">{formatBytes(b.file_size_bytes)}</td>
                       <td className="py-3 px-5 text-slate-400 font-mono text-xs">{b.duration_ms}ms</td>
                       <td className="py-3 px-5 flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {b.status === 'success' && (
-                          <Button size="icon" variant="ghost" onClick={() => handleViewBackup(b.id)} className="w-8 h-8 rounded bg-white/[0.02]">
+                        {(b.status === 'success' || b.status === 'suspect') && (
+                          <Button size="icon" variant="ghost" onClick={() => handleViewBackup(b.id)} title="Consulter le contenu du backup" className="w-8 h-8 rounded bg-white/[0.02]">
                             <Eye className="w-4 h-4 text-emerald-400" />
                           </Button>
                         )}

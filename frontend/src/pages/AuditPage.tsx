@@ -1,23 +1,27 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router'
 import { Play, Plus, Trash2, Copy, CheckCircle, ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Select from '../components/Select'
+import DeviceSelector, { DeviceSelection, DeviceSource } from '../components/DeviceSelector'
 import { getBackend } from '../lib/backend'
-
-type DeviceSource = 'last_scan' | 'manual'
 
 export default function AuditPage() {
   const qc = useQueryClient()
-  const [deviceSource, setDeviceSource] = useState<DeviceSource>('last_scan')
-  const [lastScanDevices, setLastScanDevices] = useState<any[]>([])
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([])
-  const [manualIpText, setManualIpText] = useState('')
+  const location = useLocation()
+  const handoff = location.state as { deviceIds?: string[], source?: DeviceSource } | null
+  const [selection, setSelection] = useState<DeviceSelection>(() => ({
+    source: handoff?.source || 'last_scan',
+    deviceIds: [...new Set(handoff?.deviceIds || [])],
+    manualIPs: [],
+  }))
   const [selectedRules, setSelectedRules] = useState<string[]>([])
   const [reports, setReports] = useState<any[]>([])
+  const [auditError, setAuditError] = useState('')
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [editRule, setEditRule] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'run' | 'rules'>('run')
@@ -38,36 +42,28 @@ export default function AuditPage() {
     }
   }, [rules])
 
-  useEffect(() => {
-    if (deviceSource === 'last_scan') {
-      getBackend().then(m => m.GetLastScanDevices()).then(devs => {
-        setLastScanDevices(devs || [])
-        setSelectedDevices((devs || []).map((d: any) => d.id))
-      })
-    } else {
-      setLastScanDevices([])
-      setSelectedDevices([])
-    }
-  }, [deviceSource])
-
-  const manualIPs = manualIpText.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean)
-
   const auditMutation = useMutation({
     mutationFn: async () => {
       const m = await getBackend()
       const allRuleIDs = (rules as any[]).map((r: any) => r.id)
       const useFiltered = selectedRules.length < allRuleIDs.length
 
-      let deviceIDs = selectedDevices
-      if (deviceSource === 'manual') {
-        const found = await m.GetDevicesByIPs(manualIPs)
+      let deviceIDs = selection.deviceIds
+      if (selection.source === 'manual') {
+        const found = await m.GetDevicesByIPs(selection.manualIPs)
         deviceIDs = (found || []).map((d: any) => d.id)
+      }
+
+      if (deviceIDs.length === 0) {
+        throw new Error('Aucun équipement saisi ne correspond à l’inventaire. Ajoutez-le ou lancez une découverte avant l’audit.')
       }
 
       if (useFiltered) return m.RunAuditFiltered(deviceIDs, selectedRules)
       return m.RunAudit(deviceIDs)
     },
+    onMutate: () => setAuditError(''),
     onSuccess: (data: any) => setReports(data || []),
+    onError: (error: Error) => setAuditError(error.message),
   })
 
   const saveRuleMutation = useMutation({
@@ -109,7 +105,7 @@ export default function AuditPage() {
   ]
 
   const allRulesSelected = selectedRules.length === (rules as any[]).length
-  const canAudit = deviceSource === 'manual' ? manualIPs.length > 0 : selectedDevices.length > 0
+  const canAudit = selection.source === 'manual' ? selection.manualIPs.length > 0 : selection.deviceIds.length > 0
 
   const toggleReport = (id: string) => setExpandedReports(prev => ({ ...prev, [id]: !prev[id] }))
 
@@ -140,56 +136,12 @@ export default function AuditPage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Equipements a auditer
                 </h2>
-                <div className="flex bg-slate-950/50 rounded-xl p-1 border border-white/[0.02]">
-                  {(['last_scan', 'manual'] as DeviceSource[]).map(mode => (
-                    <button key={mode} onClick={() => setDeviceSource(mode)}
-                      className={`flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${deviceSource === mode ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : 'text-slate-400 hover:text-slate-200'}`}>
-                      {mode === 'last_scan' ? 'Dernier Scan' : 'Saisie Manuelle'}
-                    </button>
-                  ))}
-                </div>
               </div>
 
-              {deviceSource === 'last_scan' && (
-                <div className="relative z-10 mb-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold text-slate-300 tracking-wide">
-                      Sélection des équipements ({selectedDevices.length}/{lastScanDevices.length})
-                    </p>
-                    <button onClick={() => setSelectedDevices(selectedDevices.length === lastScanDevices.length ? [] : lastScanDevices.map((d: any) => d.id))}
-                      className="text-xs text-blue-400 font-medium hover:text-blue-300 transition-colors uppercase tracking-wider">
-                      {selectedDevices.length === lastScanDevices.length ? 'Désélectionner Tout' : 'Sélectionner Tout'}
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
-                    {lastScanDevices.map((d: any) => (
-                      <button key={d.id}
-                        onClick={() => setSelectedDevices(prev => prev.includes(d.id) ? prev.filter(x => x !== d.id) : [...prev, d.id])}
-                        className={`relative px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 shadow-sm ${selectedDevices.includes(d.id) ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-900 border-slate-700/60 text-slate-400 hover:bg-slate-800'}`}>
-                        {d.hostname || d.ip}
-                      </button>
-                    ))}
-                    {lastScanDevices.length === 0 && (
-                      <p className="text-xs font-medium text-amber-500 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">Aucun equipement dans le dernier scan. Lancez une decouverte reseau d'abord.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {deviceSource === 'manual' && (
-                <div className="space-y-2 relative z-10 w-full mb-5">
-                  <label className="text-xs font-semibold text-slate-300 tracking-wide block">
-                    Liste d'IPs (une par ligne ou separees par virgule)
-                  </label>
-                  <textarea value={manualIpText} onChange={e => setManualIpText(e.target.value)}
-                    placeholder={"192.168.1.1\n192.168.1.2"}
-                    className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl p-4 text-xs font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 hover:border-slate-600 transition-all duration-200 resize-none shadow-inner"
-                    rows={3} />
-                  <p className="text-xs text-slate-500 font-medium tracking-wide">
-                    L'audit analysera les backups existants pour ces IPs.
-                  </p>
-                </div>
-              )}
+              <div className="relative z-10 mb-5 border-b border-white/[0.04] pb-4">
+                <DeviceSelector value={selection} onChange={setSelection}
+                  manualDescription="Seuls les équipements disposant d’une sauvegarde validée seront audités." />
+              </div>
 
               {/* Rule filter */}
               <div className="border-t border-white/[0.04] pt-4 relative z-10">
@@ -245,6 +197,7 @@ export default function AuditPage() {
                   <Play className="w-4 h-4" /> Démarrer l'Audit
                   {!allRulesSelected && ` (${selectedRules.length} ${selectedRules.length > 1 ? 'règles' : 'règle'})`}
                 </Button>
+                {auditError && <p className="mt-3 text-sm text-red-300" role="alert">{auditError}</p>}
               </div>
             </div>
 
@@ -265,7 +218,7 @@ export default function AuditPage() {
                         <span className="text-xs text-slate-500 ml-2">{report.device_ip}</span>
                         {report.total_rules > 0
                           ? <span className="ml-3 text-sm text-slate-400">{report.passed}/{report.total_rules} regles</span>
-                          : <span className="ml-3 text-sm text-amber-400">Aucun backup disponible</span>
+                          : <span className="ml-3 text-sm text-amber-400">Audit non exécuté</span>
                         }
                       </div>
                     </div>
@@ -295,8 +248,8 @@ export default function AuditPage() {
                   {isExpanded && (
                     <>
                       {report.total_rules === 0 ? (
-                        <div className="p-4 text-sm text-slate-500">
-                          Aucune configuration sauvegardee pour cet equipement. Effectuez un backup avant de lancer l'audit.
+                        <div className="p-4 text-sm text-amber-300">
+                          {report.error_message || 'Aucune sauvegarde validée disponible. Effectuez un backup avant de lancer l’audit.'}
                         </div>
                       ) : (
                         <div className="p-4 space-y-2">

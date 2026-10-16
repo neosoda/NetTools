@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router'
 import { Radio, Play, Square, FileSpreadsheet, Network, Layers, Cpu } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
@@ -31,6 +32,7 @@ type ScanMode = 'switches' | 'full' | 'cidr'
 
 export default function ScanPage() {
   const { globalCredId } = useGlobalCredential()
+  const navigate = useNavigate()
   const [scanMode, setScanMode] = useState<ScanMode>('switches')
   const [prefix, setPrefix] = useState('192.168.1')  // base prefix for switches/full modes
   const [cidr, setCidr] = useState('192.168.1.0/24')
@@ -294,9 +296,13 @@ export default function ScanPage() {
                 </div>
                 <h2 className="text-sm font-semibold text-slate-200">Découverts et analysés</h2>
               </div>
-              <Button variant="outline" size="sm" loading={exporting} onClick={handleExportExcel} className="h-8">
-                <FileSpreadsheet className="w-4 h-4 mr-2" /> Exporter le rapport
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" onClick={() => navigate('/backup', { state: { source: 'last_scan', deviceIds: results.map(device => device.id) } })} className="h-8">Sauvegarder les résultats</Button>
+                <Button variant="secondary" size="sm" onClick={() => navigate('/audit', { state: { source: 'last_scan', deviceIds: results.map(device => device.id) } })} className="h-8">Auditer les résultats</Button>
+                <Button variant="outline" size="sm" loading={exporting} onClick={handleExportExcel} className="h-8">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" /> Exporter le rapport
+                </Button>
+              </div>
             </div>
             <div className="overflow-x-auto flex-1 custom-scrollbar">
               <table className="w-full text-sm">
