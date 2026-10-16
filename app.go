@@ -385,6 +385,15 @@ func mergeDiscoveredDevice(existing, discovered models.Device) models.Device {
 	if discovered.OSVersion != "" {
 		existing.OSVersion = discovered.OSVersion
 	}
+	if discovered.Description != "" {
+		existing.Description = discovered.Description
+	}
+	if discovered.Location != "" {
+		existing.Location = discovered.Location
+	}
+	if discovered.Contact != "" {
+		existing.Contact = discovered.Contact
+	}
 	if discovered.MACAddress != "" {
 		existing.MACAddress = discovered.MACAddress
 	}
@@ -799,6 +808,15 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 		}
 	}
 
+	responded, noResponse := 0, 0
+	for _, r := range results {
+		if r.Reachable {
+			responded++
+		} else {
+			noResponse++
+		}
+	}
+
 	// Save last scan device IDs
 	a.mu.Lock()
 	a.lastScanIDs = discoveredIDs
@@ -812,8 +830,11 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 		fmt.Sprintf(`{"found":%d,"duration_ms":%d}`, len(discovered), time.Since(start).Milliseconds()),
 		"success", time.Since(start).Milliseconds())
 	runtime.EventsEmit(a.ctx, "scan:complete", map[string]interface{}{
-		"found":    len(discovered),
-		"duration": time.Since(start).Milliseconds(),
+		"found":       len(discovered),
+		"responded":   responded,
+		"no_response": noResponse,
+		"processed":   len(results),
+		"duration":    time.Since(start).Milliseconds(),
 	})
 
 	return discovered, nil
@@ -911,6 +932,7 @@ func (a *App) resultToDevice(r snmp.ScanResult, credID, snmpVersion string) mode
 	hostname := strings.TrimSpace(r.Data["sysName"])
 	description := strings.TrimSpace(r.Data["sysDescr"])
 	location := strings.TrimSpace(r.Data["sysLocation"])
+	contact := strings.TrimSpace(r.Data["sysContact"])
 	sysObjectID := strings.TrimSpace(r.Data["sysObjectID"])
 	mac := strings.TrimSpace(r.Data["sysMACAddress"])
 
@@ -954,6 +976,7 @@ func (a *App) resultToDevice(r snmp.ScanResult, credID, snmpVersion string) mode
 		Hostname:      hostname,
 		Description:   description,
 		Location:      location,
+		Contact:       contact,
 		Vendor:        vendor,
 		Model:         model,
 		MACAddress:    mac,
@@ -1509,116 +1532,66 @@ func (a *App) CompareBackups(backupIDA, backupIDB string) (*diff.DiffResult, err
 // ─────────────────────────────────────────────
 
 func (a *App) RunAudit(deviceIDs []string) ([]audit.AuditReport, error) {
-	var reports []audit.AuditReport
-
-	for _, deviceID := range deviceIDs {
-		var device models.Device
-		if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
-			continue
-		}
-
-		// Get latest successful backup content
-		var latestBackup models.Backup
-		err := db.DB.Where("device_id = ? AND status = 'success'", deviceID).
-			Order("created_at DESC").First(&latestBackup).Error
-		if err != nil {
-			reports = append(reports, audit.AuditReport{
-				DeviceID:     deviceID,
-				DeviceIP:     device.IP,
-				DeviceHost:   device.Hostname,
-				Status:       "unavailable",
-				ErrorMessage: "Aucune sauvegarde validée disponible",
-			})
-			logger.AuditAction(a.ctx, "audit", "device", deviceID,
-				fmt.Sprintf(`{"ip":"%s","error":"no_backup"}`, device.IP), "failed", 0)
-			continue
-		}
-
-		content, err := a.backupMgr.GetContent(latestBackup.ID)
-		if err != nil {
-			reports = append(reports, audit.AuditReport{
-				DeviceID:     deviceID,
-				DeviceIP:     device.IP,
-				DeviceHost:   device.Hostname,
-				Status:       "unavailable",
-				ErrorMessage: "La sauvegarde validée est inaccessible",
-			})
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
-		report, err := a.auditEngine.Run(ctx, audit.AuditRequest{
-			Device: device,
-			Config: content,
-		})
-		cancel()
-
-		if err == nil && report != nil {
-			reports = append(reports, *report)
-			logger.AuditAction(a.ctx, "audit", "device", deviceID,
-				fmt.Sprintf(`{"ip":"%s","score":%.0f,"passed":%d,"total":%d}`,
-					device.IP, report.Score, report.Passed, report.TotalRules),
-				"success", 0)
-		}
-	}
-
-	return reports, nil
+	return a.runAudits(deviceIDs, nil)
 }
 
 // RunAuditFiltered runs audit with specific device IDs and rule IDs (empty ruleIDs = all enabled rules)
 func (a *App) RunAuditFiltered(deviceIDs []string, ruleIDs []string) ([]audit.AuditReport, error) {
+	return a.runAudits(deviceIDs, ruleIDs)
+}
+
+func (a *App) runAudits(deviceIDs, ruleIDs []string) ([]audit.AuditReport, error) {
 	var reports []audit.AuditReport
 
 	for _, deviceID := range deviceIDs {
 		var device models.Device
 		if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
+			reports = append(reports, audit.AuditReport{DeviceID: deviceID, Status: "error", ErrorMessage: "Équipement introuvable dans l’inventaire."})
 			continue
 		}
-
-		var latestBackup models.Backup
-		err := db.DB.Where("device_id = ? AND status = 'success'", deviceID).
-			Order("created_at DESC").First(&latestBackup).Error
-		if err != nil {
-			reports = append(reports, audit.AuditReport{
-				DeviceID:     deviceID,
-				DeviceIP:     device.IP,
-				DeviceHost:   device.Hostname,
-				Status:       "unavailable",
-				ErrorMessage: "Aucune sauvegarde validée disponible",
-			})
-			continue
+		report := a.auditDevice(device, ruleIDs)
+		reports = append(reports, report)
+		auditStatus := "success"
+		if report.Status == "error" {
+			auditStatus = "failed"
 		}
-
-		content, err := a.backupMgr.GetContent(latestBackup.ID)
-		if err != nil {
-			reports = append(reports, audit.AuditReport{
-				DeviceID:     deviceID,
-				DeviceIP:     device.IP,
-				DeviceHost:   device.Hostname,
-				Status:       "unavailable",
-				ErrorMessage: "La sauvegarde validée est inaccessible",
-			})
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
-		report, err := a.auditEngine.Run(ctx, audit.AuditRequest{
-			Device:  device,
-			Config:  content,
-			RuleIDs: ruleIDs,
-		})
-		cancel()
-
-		if err == nil && report != nil {
-			reports = append(reports, *report)
-			logger.AuditAction(a.ctx, "audit", "device", deviceID,
-				fmt.Sprintf(`{"ip":"%s","score":%.0f,"passed":%d,"total":%d,"rules":%d}`,
-					device.IP, report.Score, report.Passed, report.TotalRules, len(ruleIDs)),
-				"success", 0)
-		}
+		logger.AuditAction(a.ctx, "audit", "device", deviceID,
+			fmt.Sprintf(`{"ip":"%s","score":%.0f,"assessed":%d,"total":%d,"rules":%d}`,
+				device.IP, report.Score, report.Assessed, report.TotalRules, len(ruleIDs)), auditStatus, 0)
 	}
-
 	return reports, nil
+}
+
+func (a *App) auditDevice(device models.Device, ruleIDs []string) audit.AuditReport {
+	base := audit.AuditReport{DeviceID: device.ID, DeviceIP: device.IP, DeviceHost: device.Hostname, Status: "error"}
+	var latestBackup models.Backup
+	if err := db.DB.Where("device_id = ?", device.ID).Order("created_at DESC").First(&latestBackup).Error; err != nil {
+		base.ErrorMessage = "Aucune sauvegarde disponible. Créez une sauvegarde validée avant de relancer l’audit."
+		return base
+	}
+	base.BackupID = latestBackup.ID
+	base.BackupStatus = latestBackup.Status
+	base.BackupAt = &latestBackup.CreatedAt
+	if latestBackup.Status != "success" {
+		base.ErrorMessage = fmt.Sprintf("La dernière sauvegarde est au statut %q et ne peut pas servir de preuve d’audit.", latestBackup.Status)
+		return base
+	}
+	content, err := a.backupMgr.GetContent(latestBackup.ID)
+	if err != nil || strings.TrimSpace(content) == "" {
+		base.ErrorMessage = "La sauvegarde validée est inaccessible ou vide. Relancez une sauvegarde avant l’audit."
+		return base
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	report, err := a.auditEngine.Run(ctx, audit.AuditRequest{Device: device, Config: content, RuleIDs: ruleIDs})
+	if err != nil || report == nil {
+		base.ErrorMessage = "Impossible d’exécuter correctement les contrôles d’audit."
+		return base
+	}
+	report.BackupID = latestBackup.ID
+	report.BackupStatus = latestBackup.Status
+	report.BackupAt = &latestBackup.CreatedAt
+	return *report
 }
 
 func (a *App) GetAuditRules() ([]models.AuditRule, error) {
@@ -2076,4 +2049,3 @@ func extractStringSlice(m map[string]interface{}, key string) []string {
 // ─────────────────────────────────────────────
 // PORT TRACKER
 // ─────────────────────────────────────────────
-

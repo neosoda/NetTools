@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router'
-import { Radio, Play, Square, FileSpreadsheet, Network, Layers, Cpu } from 'lucide-react'
+import { Radio, Play, Square, FileSpreadsheet, Network, Layers, Cpu, Upload, Search } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -20,6 +20,63 @@ function formatUptime(seconds?: number) {
   return `${hours}h${String(minutes).padStart(2,'0')}m`
 }
 
+const MAX_SCAN_TARGETS = 1024
+
+function parseIPv4(value: string): number[] | null {
+  const parts = value.trim().split('.')
+  if (parts.length !== 4 || parts.some(part => !/^\d{1,3}$/.test(part))) return null
+  const octets = parts.map(Number)
+  return octets.every(octet => octet >= 0 && octet <= 255) ? octets : null
+}
+
+function ipv4ToNumber(ip: string) {
+  const octets = parseIPv4(ip)
+  if (!octets) return null
+  return octets.reduce((value, octet) => value * 256 + octet, 0)
+}
+
+function numberToIPv4(value: number) {
+  return [24, 16, 8, 0].map(shift => Math.floor(value / 2 ** shift) % 256).join('.')
+}
+
+function validatePrefix(value: string) {
+  const octets = value.trim().split('.')
+  return octets.length === 3 && octets.every(octet => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+}
+
+function validateCIDR(value: string): { count: number } | null {
+  const [ip, prefixRaw, ...rest] = value.trim().split('/')
+  const prefix = Number(prefixRaw)
+  if (rest.length > 0 || !parseIPv4(ip) || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) return null
+  const addresses = 2 ** (32 - prefix)
+  return { count: prefix >= 31 ? addresses : addresses - 2 }
+}
+
+function parseManualTargets(value: string): { targets: string[]; error?: string } {
+  const targets = new Set<string>()
+  const tokens = value.split(/[\s,;]+/).map(token => token.trim()).filter(Boolean)
+  if (tokens.length === 0) return { targets: [], error: 'Ajoutez au moins une adresse IP ou une plage.' }
+
+  for (const token of tokens) {
+    const range = token.split('-').map(part => part.trim())
+    if (range.length === 1) {
+      const numeric = ipv4ToNumber(range[0])
+      if (numeric === null) return { targets: [], error: `Adresse IPv4 invalide : ${token}` }
+      targets.add(numberToIPv4(numeric))
+    } else if (range.length === 2) {
+      const start = ipv4ToNumber(range[0])
+      const end = ipv4ToNumber(range[1])
+      if (start === null || end === null || start > end) return { targets: [], error: `Plage IPv4 invalide : ${token}` }
+      if (end - start + 1 > MAX_SCAN_TARGETS) return { targets: [], error: `La plage ${token} dépasse ${MAX_SCAN_TARGETS} cibles.` }
+      for (let current = start; current <= end; current++) targets.add(numberToIPv4(current))
+    } else {
+      return { targets: [], error: `Cible invalide : ${token}` }
+    }
+    if (targets.size > MAX_SCAN_TARGETS) return { targets: [], error: `Un scan est limité à ${MAX_SCAN_TARGETS} cibles.` }
+  }
+  return { targets: [...targets] }
+}
+
 // Build IP list for switch range: x.1-95 + x.254
 function buildSwitchIPs(prefix: string): string[] {
   const ips: string[] = []
@@ -28,7 +85,8 @@ function buildSwitchIPs(prefix: string): string[] {
   return ips
 }
 
-type ScanMode = 'switches' | 'full' | 'cidr'
+type ScanMode = 'switches' | 'full' | 'cidr' | 'targets'
+type ScanSummary = { found: number; responded: number; no_response: number; processed: number }
 
 export default function ScanPage() {
   const { globalCredId } = useGlobalCredential()
@@ -36,49 +94,74 @@ export default function ScanPage() {
   const [scanMode, setScanMode] = useState<ScanMode>('switches')
   const [prefix, setPrefix] = useState('192.168.1')  // base prefix for switches/full modes
   const [cidr, setCidr] = useState('192.168.1.0/24')
+  const [manualTargets, setManualTargets] = useState('')
   const [community, setCommunity] = useState('public')
   const [workers, setWorkers] = useState('10')
   const [timeout, setTimeoutVal] = useState('3')
   const [scanning, setScanning] = useState(false)
   const [progress, setProgress] = useState<{ ip: string; done: number; total: number; percent: number } | null>(null)
   const [results, setResults] = useState<Device[]>([])
+  const [scanSummary, setScanSummary] = useState<ScanSummary | null>(null)
   const [scanDone, setScanDone] = useState(false)
   const [error, setError] = useState('')
   const [testIp, setTestIp] = useState('')
   const [testResult, setTestResult] = useState<any>(null)
   const [testing, setTesting] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [resultSearch, setResultSearch] = useState('')
+  const [resultSort, setResultSort] = useState<'ip' | 'hostname' | 'vendor'>('ip')
   const resultDeviceIds = useRef<string[]>([])
+  const importRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const unsub1 = EventsOn('scan:progress', (data: any) => setProgress(data))
-    const unsub2 = EventsOn('scan:complete', () => { setScanning(false); setProgress(null) })
+    const unsub2 = EventsOn('scan:complete', (data: ScanSummary) => { setScanSummary(data); setScanning(false); setProgress(null) })
     const unsub3 = EventsOn('tasks:stopped', () => { setScanning(false); setProgress(null) })
     return () => { unsub1(); unsub2(); unsub3() }
   }, [])
 
+  const visibleResults = useMemo(() => {
+    const query = resultSearch.trim().toLowerCase()
+    const filtered = query
+      ? results.filter(device => [device.ip, device.hostname, device.vendor, device.model, device.location, device.contact, device.os_version].some(value => value?.toLowerCase().includes(query)))
+      : results
+    return [...filtered].sort((left, right) => {
+      if (resultSort === 'ip') return (ipv4ToNumber(left.ip) ?? 0) - (ipv4ToNumber(right.ip) ?? 0)
+      return (left[resultSort] || '').localeCompare(right[resultSort] || '', 'fr')
+    })
+  }, [results, resultSearch, resultSort])
+
   const handleScan = async () => {
     setError('')
-    setScanning(true)
-    setScanDone(false)
-    setResults([])
-    resultDeviceIds.current = []
-
-    // Enforce a safe upper bound for workers to avoid OOM
-    const safeWorkers = Math.min(parseInt(workers), 50)
+    const safeWorkers = Number(workers)
+    const safeTimeout = Number(timeout)
     let scanCidr = ''
     let ipList: string[] = []
 
     if (scanMode === 'switches') {
-      if (!prefix.trim()) { setError('Préfixe réseau requis (ex: 192.168.1)'); setScanning(false); return }
+      if (!validatePrefix(prefix)) { setError('Préfixe IPv4 requis (ex. 192.168.1).'); return }
       ipList = buildSwitchIPs(prefix.trim())
     } else if (scanMode === 'full') {
-      if (!prefix.trim()) { setError('Préfixe réseau requis (ex: 192.168.1)'); setScanning(false); return }
+      if (!validatePrefix(prefix)) { setError('Préfixe IPv4 requis (ex. 192.168.1).'); return }
       scanCidr = `${prefix.trim()}.0/24`
-    } else {
-      if (!cidr.trim()) { setError('CIDR requis'); setScanning(false); return }
+    } else if (scanMode === 'cidr') {
+      const cidrInfo = validateCIDR(cidr)
+      if (!cidrInfo) { setError('CIDR IPv4 invalide (ex. 10.0.0.0/24).'); return }
+      if (cidrInfo.count > MAX_SCAN_TARGETS) { setError(`Le CIDR contient ${cidrInfo.count} cibles. Limite : ${MAX_SCAN_TARGETS}.`); return }
       scanCidr = cidr.trim()
+    } else {
+      const parsed = parseManualTargets(manualTargets)
+      if (parsed.error) { setError(parsed.error); return }
+      ipList = parsed.targets
     }
+    if (!Number.isInteger(safeWorkers) || safeWorkers < 1 || safeWorkers > 50) { setError('Le nombre de workers doit être compris entre 1 et 50.'); return }
+    if (!Number.isInteger(safeTimeout) || safeTimeout < 1 || safeTimeout > 30) { setError('Le timeout doit être compris entre 1 et 30 secondes.'); return }
+
+    setScanning(true)
+    setScanDone(false)
+    setResults([])
+    setScanSummary(null)
+    resultDeviceIds.current = []
 
     try {
       const m = await getBackend()
@@ -88,17 +171,29 @@ export default function ScanPage() {
         community: globalCredId ? '' : (community.trim() || 'public'),
         credential_id: globalCredId,
         workers: safeWorkers,
-        timeout_sec: parseInt(timeout),
+        timeout_sec: safeTimeout,
       }))
       const devs = (discovered || []) as Device[];
-    setResults(devs);
-    resultDeviceIds.current = devs.map(d => d.id);
-    setScanDone(true);
+      setResults(devs)
+      resultDeviceIds.current = devs.map(d => d.id)
+      setScanDone(true)
     } catch (e: any) {
       setError(e?.message || String(e))
     } finally {
       setScanning(false)
       setProgress(null)
+    }
+  }
+
+  const handleTargetImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      const content = await file.text()
+      setManualTargets(previous => [previous, content].filter(Boolean).join('\n'))
+    } catch {
+      setError('Impossible de lire le fichier de cibles.')
     }
   }
 
@@ -140,8 +235,9 @@ export default function ScanPage() {
 
   const scanModeDesc: Record<ScanMode, string> = {
     switches: `Switches : ${prefix}.1-95 + ${prefix}.254 (${96} IPs)`,
-    full: `Complet : ${prefix}.0/24 (256 IPs)`,
+    full: `Complet : ${prefix}.0/24 (254 cibles)`,
     cidr: 'Plage CIDR personnalisée',
+    targets: 'Adresses IPv4, plages et import de liste',
   }
 
   return (
@@ -176,13 +272,32 @@ export default function ScanPage() {
                 className={`flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${scanMode === 'cidr' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-400 hover:text-slate-200'}`}>
                 <Network className="w-3.5 h-3.5" /> CIDR
               </button>
+              <button onClick={() => setScanMode('targets')}
+                title="Liste ou plage d'adresses IPv4"
+                className={`flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${scanMode === 'targets' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-400 hover:text-slate-200'}`}>
+                <Upload className="w-3.5 h-3.5" /> Liste
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-5 items-end relative z-10 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 items-end relative z-10 w-full">
             {scanMode === 'cidr' ? (
               <Input label="CIDR / Plage IP" value={cidr} onChange={e => setCidr(e.target.value)}
                 placeholder="10.0.0.0/24" className="w-full" />
+            ) : scanMode === 'targets' ? (
+              <div className="md:col-span-2 xl:col-span-2">
+                <label htmlFor="manual-targets" className="block text-xs font-semibold text-slate-300 tracking-wide mb-1.5">Adresses et plages IPv4</label>
+                <textarea id="manual-targets" value={manualTargets} onChange={event => setManualTargets(event.target.value)} rows={3}
+                  placeholder={'192.168.1.10\n192.168.1.20-192.168.1.30'}
+                  className="w-full resize-y bg-slate-900/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+                <div className="mt-2 flex items-center gap-3">
+                  <input ref={importRef} type="file" accept=".txt,.csv,text/plain,text/csv" onChange={handleTargetImport} className="hidden" />
+                  <Button type="button" variant="outline" size="sm" onClick={() => importRef.current?.click()}>
+                    <Upload className="w-3.5 h-3.5" /> Importer un fichier
+                  </Button>
+                  <p className="text-[11px] text-slate-500">Une adresse ou plage par ligne ; doublons retirés. Maximum {MAX_SCAN_TARGETS} cibles.</p>
+                </div>
+              </div>
             ) : (
               <div className="w-full">
                 <Input label="Préfixe réseau (3 octets)" value={prefix} onChange={e => setPrefix(e.target.value)}
@@ -195,7 +310,7 @@ export default function ScanPage() {
               placeholder="public" className="w-full" />
             <Input label="Timeout (s)" type="number" min="1" max="30"
               value={timeout} onChange={e => setTimeoutVal(e.target.value)} className="w-full" />
-            <Input label="Workers" type="number" min="1" max="200"
+            <Input label="Workers" type="number" min="1" max="50"
               value={workers} onChange={e => setWorkers(e.target.value)} className="w-full" />
           </div>
 
@@ -208,7 +323,7 @@ export default function ScanPage() {
               ) : <div />}
               {error && <p className="text-sm font-medium text-red-400 mt-2 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500" />{error}</p>}
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {scanning && (
                 <Button variant="danger" onClick={handleStop}>
                   <Square className="w-4 h-4" /> Arrêter
@@ -224,7 +339,7 @@ export default function ScanPage() {
         {/* Progress */}
         {scanning && progress && (
           <div className="bg-slate-900/40 backdrop-blur-md border border-white/[0.05] rounded-2xl p-5 shadow-lg relative overflow-hidden">
-            <div className="absolute inset-0 bg-blue-500/[0.02] animate-pulse" />
+            <div className="absolute inset-0 bg-blue-500/[0.02]" />
             <div className="flex items-center justify-between text-sm mb-3 relative z-10">
               <span className="text-slate-300 font-medium flex items-center gap-2">
                 <Radio className="w-4 h-4 text-blue-400 animate-pulse" />
@@ -247,12 +362,12 @@ export default function ScanPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
             Test unitaire & Diagnostic
           </h2>
-          <div className="flex gap-4 items-end max-w-2xl">
+          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end max-w-2xl">
             <div className="flex-1">
               <Input label="Tester une IP spécifique" value={testIp} onChange={e => setTestIp(e.target.value)}
                 placeholder="192.168.1.1" />
             </div>
-            <Button variant="outline" loading={testing} onClick={handleTest} className="px-6 mb-1">
+            <Button variant="outline" loading={testing} onClick={handleTest} className="px-6 sm:mb-1">
               Test ciblé
             </Button>
           </div>
@@ -282,26 +397,46 @@ export default function ScanPage() {
               <Network className="w-6 h-6 text-amber-500" />
             </div>
             <p className="text-lg font-semibold text-slate-200 mb-2">Aucun équipement SNMP découvert</p>
-            <p className="text-sm text-slate-500 max-w-md">Vérifiez les causes éventuelles : communauté incorrecte, blocage du port UDP/161, SNMP désactivé sur les cibles, ou inaccessibilité réseau.</p>
+            <p className="text-sm text-slate-500 max-w-md">{scanSummary?.no_response
+              ? `${scanSummary.no_response} cible${scanSummary.no_response > 1 ? 's' : ''} n’a${scanSummary.no_response > 1 ? 'nt' : ''} donné aucune réponse SNMP.`
+              : 'Vérifiez la communauté, le port UDP/161 et l’activation de SNMP sur les cibles.'}</p>
           </div>
         )}
 
         {/* Results */}
         {results.length > 0 && (
           <div className="bg-slate-900/40 backdrop-blur-md border border-white/[0.05] rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[600px]">
-            <div className="px-6 py-4 border-b border-white/[0.04] flex justify-between items-center bg-slate-950/40 sticky top-0">
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold tracking-wider">
-                  {results.length} SYSTÈMES
+            <div className="px-6 py-4 border-b border-white/[0.04] flex flex-col gap-4 bg-slate-950/40 sticky top-0">
+              <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold tracking-wider">
+                    {results.length} SYSTÈMES
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-200">Découverts et analysés</h2>
+                    {scanSummary && <p className="text-xs text-slate-500 mt-0.5">{scanSummary.responded} réponse{scanSummary.responded > 1 ? 's' : ''} SNMP ; {scanSummary.no_response} sans réponse SNMP</p>}
+                  </div>
                 </div>
-                <h2 className="text-sm font-semibold text-slate-200">Découverts et analysés</h2>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/backup', { state: { source: 'last_scan', deviceIds: results.map(device => device.id) } })} className="h-8">Sauvegarder les résultats</Button>
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/audit', { state: { source: 'last_scan', deviceIds: results.map(device => device.id) } })} className="h-8">Auditer les résultats</Button>
+                  <Button variant="outline" size="sm" loading={exporting} onClick={handleExportExcel} className="h-8">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" /> Exporter le rapport
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" size="sm" onClick={() => navigate('/backup', { state: { source: 'last_scan', deviceIds: results.map(device => device.id) } })} className="h-8">Sauvegarder les résultats</Button>
-                <Button variant="secondary" size="sm" onClick={() => navigate('/audit', { state: { source: 'last_scan', deviceIds: results.map(device => device.id) } })} className="h-8">Auditer les résultats</Button>
-                <Button variant="outline" size="sm" loading={exporting} onClick={handleExportExcel} className="h-8">
-                  <FileSpreadsheet className="w-4 h-4 mr-2" /> Exporter le rapport
-                </Button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                  <input value={resultSearch} onChange={event => setResultSearch(event.target.value)} placeholder="Rechercher IP, nom, modèle, localisation…"
+                    className="w-full bg-slate-900/60 border border-slate-700/60 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+                </div>
+                <select aria-label="Trier les résultats" value={resultSort} onChange={event => setResultSort(event.target.value as typeof resultSort)}
+                  className="bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+                  <option value="ip">Trier par IP</option>
+                  <option value="hostname">Trier par nom</option>
+                  <option value="vendor">Trier par constructeur</option>
+                </select>
               </div>
             </div>
             <div className="overflow-x-auto flex-1 custom-scrollbar">
@@ -316,7 +451,7 @@ export default function ScanPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.02]">
-                  {results.map((d: Device) => (
+                  {visibleResults.map((d: Device) => (
                     <tr key={d.id} className="hover:bg-white/[0.02] transition-colors group">
                       <td className="py-3 px-5">
                         <span className="font-mono text-blue-400 font-medium bg-blue-500/5 px-2 py-1 rounded-md border border-blue-500/10 group-hover:border-blue-500/30 transition-colors">
@@ -325,7 +460,7 @@ export default function ScanPage() {
                       </td>
                       <td className="py-3 px-5 font-medium text-slate-200">
                         {d.hostname || <span className="text-slate-600 italic">Non défini</span>}
-                        {d.location && <div className="text-[11px] text-slate-500 font-normal mt-0.5 max-w-[200px] truncate" title={d.location}>{d.location}</div>}
+                        {(d.location || d.contact) && <div className="text-[11px] text-slate-500 font-normal mt-0.5 max-w-[240px] truncate" title={[d.location, d.contact].filter(Boolean).join(' · ')}>{[d.location, d.contact].filter(Boolean).join(' · ')}</div>}
                       </td>
                       <td className="py-3 px-5">
                         <div className="flex flex-col gap-1">
@@ -347,6 +482,7 @@ export default function ScanPage() {
                   ))}
                 </tbody>
               </table>
+              {visibleResults.length === 0 && <p className="p-6 text-sm text-slate-500">Aucun équipement ne correspond au filtre.</p>}
             </div>
           </div>
         )}

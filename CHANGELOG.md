@@ -6,6 +6,27 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [1.6.0] - 2026-10-16
+
+### Ajouts
+- **Découverte SNMP** : ciblage CIDR, plages et listes d'adresses avec validation, déduplication et plafond de 1 024 cibles ; import TXT/CSV et restitution distincte des réponses et absences de réponse.
+- **Inventaire** : persistance SQLite, fusion des imports, déduplication et conservation des métadonnées de découverte.
+- **Audit de conformité** : conclusions explicites `conforme`, `non conforme`, `non applicable`, `indéterminé` et `erreur`, accompagnées de preuves contextualisées et d'un score limité aux contrôles évaluables.
+
+### Changements
+- Retrait des modules Port Tracker / utilisation des ports et Topologie du produit public.
+- Le catalogue d'audit est recentré sur des contrôles génériques et constructeur vérifiables (Cisco, Aruba, AlliedWare Plus, Huawei et Fortinet). Les règles historiques livrées qui portaient des hypothèses de déploiement sont désactivées, sans suppression des données ni des règles créées par l'utilisateur.
+- Les recommandations d'audit sont consultatives : NetTools ne génère ni n'exécute de script de remédiation.
+- L'audit utilise la dernière sauvegarde et refuse de conclure si elle est absente, `suspect` ou `failed`.
+
+### Sécurité
+- Les preuves et recommandations d'audit masquent les éléments de configuration sensibles.
+- Les dépendances npm auditées ne signalent aucune vulnérabilité au moment de cette release.
+
+### Validation
+- Tests ciblés Go, vérification TypeScript, build frontend et compilation Wails Windows de production.
+- Aucun scan réseau ni connexion SSH n'a été exécuté pendant la préparation de cette release.
+
 ## [1.5.2] - 2026-10-14
 
 ### Corrigé

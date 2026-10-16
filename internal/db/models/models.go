@@ -5,22 +5,23 @@ import (
 )
 
 type Device struct {
-	ID             string    `json:"id" gorm:"primaryKey"`
-	IP             string    `json:"ip" gorm:"uniqueIndex;not null"`
-	Hostname       string    `json:"hostname"`
-	Vendor         string    `json:"vendor"` // cisco|aruba|allied|unknown
-	Model          string    `json:"model"`
-	OSVersion      string    `json:"os_version"`
-	Location       string    `json:"location"`
-	UptimeSeconds  int64     `json:"uptime_seconds"`
-	MACAddress     string    `json:"mac_address"`
-	SerialNumber   string    `json:"serial_number"`
-	Tags           string    `json:"tags"` // JSON array string
-	SNMPVersion    string    `json:"snmp_version"` // v2c|v3
-	SNMPPort       int       `json:"snmp_port" gorm:"default:161"`
-	SSHPort        int       `json:"ssh_port" gorm:"default:22"`
-	CredentialID   string    `json:"credential_id"`
-	Description    string    `json:"description"`
+	ID            string `json:"id" gorm:"primaryKey"`
+	IP            string `json:"ip" gorm:"uniqueIndex;not null"`
+	Hostname      string `json:"hostname"`
+	Vendor        string `json:"vendor"` // cisco|aruba|allied|unknown
+	Model         string `json:"model"`
+	OSVersion     string `json:"os_version"`
+	Location      string `json:"location"`
+	Contact       string `json:"contact"`
+	UptimeSeconds int64  `json:"uptime_seconds"`
+	MACAddress    string `json:"mac_address"`
+	SerialNumber  string `json:"serial_number"`
+	Tags          string `json:"tags"`         // JSON array string
+	SNMPVersion   string `json:"snmp_version"` // v2c|v3
+	SNMPPort      int    `json:"snmp_port" gorm:"default:161"`
+	SSHPort       int    `json:"ssh_port" gorm:"default:22"`
+	CredentialID  string `json:"credential_id"`
+	Description   string `json:"description"`
 	// LastSeenAt is the date of the last successful SNMP discovery. It is not a
 	// reachability indicator outside of that scan.
 	LastSeenAt              *time.Time `json:"last_seen_at"`
@@ -63,17 +64,17 @@ type CredentialView struct {
 }
 
 type Backup struct {
-	ID           string    `json:"id" gorm:"primaryKey"`
-	DeviceID     string    `json:"device_id" gorm:"index;not null"`
-	ConfigType   string    `json:"config_type"` // running|startup
-	FilePath     string    `json:"file_path"`
-	FileSizeBytes int64    `json:"file_size_bytes"`
-	SHA256Hash   string    `json:"sha256_hash"`
-	Status       string    `json:"status"` // success|suspect|failed
-	DurationMs   int64     `json:"duration_ms"`
-	ErrorMessage string    `json:"error_message"`
-	Content      string    `json:"content,omitempty" gorm:"-"` // transient
-	CreatedAt    time.Time `json:"created_at" gorm:"index"`
+	ID            string    `json:"id" gorm:"primaryKey"`
+	DeviceID      string    `json:"device_id" gorm:"index;not null"`
+	ConfigType    string    `json:"config_type"` // running|startup
+	FilePath      string    `json:"file_path"`
+	FileSizeBytes int64     `json:"file_size_bytes"`
+	SHA256Hash    string    `json:"sha256_hash"`
+	Status        string    `json:"status"` // success|suspect|failed
+	DurationMs    int64     `json:"duration_ms"`
+	ErrorMessage  string    `json:"error_message"`
+	Content       string    `json:"content,omitempty" gorm:"-"` // transient
+	CreatedAt     time.Time `json:"created_at" gorm:"index"`
 }
 
 type ScheduledJob struct {
@@ -96,7 +97,7 @@ type AuditLog struct {
 	EntityType string    `json:"entity_type"`
 	EntityID   string    `json:"entity_id"`
 	Details    string    `json:"details"` // JSON
-	Status     string    `json:"status"` // success|failure
+	Status     string    `json:"status"`  // success|failure
 	DurationMs int64     `json:"duration_ms"`
 	CreatedAt  time.Time `json:"created_at" gorm:"index"`
 }
@@ -110,11 +111,13 @@ type AuditRule struct {
 	ID          string    `json:"id" gorm:"primaryKey"`
 	Name        string    `json:"name" gorm:"not null"`
 	Description string    `json:"description"`
-	Pattern     string    `json:"pattern" gorm:"not null"`       // regex (supports "pattern1 AND pattern2" for multi-line blocks)
-	MustMatch   bool      `json:"must_match"`                    // true=must be present, false=must be absent
-	Vendor      string    `json:"vendor"`                        // empty=all vendors
-	Severity    string    `json:"severity"`                      // critical|high|medium|low
-	Remediation string    `json:"remediation"`                   // CLI commands to fix (template with {{hostname}}, {{ip}})
+	Category    string    `json:"category"`
+	Risk        string    `json:"risk"`
+	Pattern     string    `json:"pattern" gorm:"not null"` // regex (supports "pattern1 AND pattern2" for multi-line blocks)
+	MustMatch   bool      `json:"must_match"`              // true=must be present, false=must be absent
+	Vendor      string    `json:"vendor"`                  // empty=all vendors
+	Severity    string    `json:"severity"`                // critical|high|medium|low
+	Remediation string    `json:"remediation"`             // CLI commands to fix (template with {{hostname}}, {{ip}})
 	Enabled     bool      `json:"enabled" gorm:"default:true"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -125,7 +128,12 @@ type AuditResult struct {
 	RuleID      string    `json:"rule_id"`
 	RuleName    string    `json:"rule_name"`
 	Passed      bool      `json:"passed"`
+	Status      string    `json:"status"` // compliant|non_compliant|not_applicable|indeterminate|error
+	Category    string    `json:"category"`
+	Expected    string    `json:"expected"`
+	Risk        string    `json:"risk"`
 	Details     string    `json:"details"`
+	Evidence    string    `json:"evidence"`
 	Severity    string    `json:"severity"`
 	Remediation string    `json:"remediation"` // generated CLI fix for this specific failure
 	CreatedAt   time.Time `json:"created_at"`

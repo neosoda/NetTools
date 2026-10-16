@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useLocation } from 'react-router'
-import { AlertTriangle, Play, Eye, Terminal, RefreshCw, Send, Clock } from 'lucide-react'
+import { AlertTriangle, Archive, Play, Eye, Terminal, RefreshCw, Send, ShieldCheck, Clock } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Select from '../components/Select'

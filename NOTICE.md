@@ -1108,7 +1108,7 @@ Pour les développeurs étendant l'application, les événements Wails émis :
 | Événement | Payload | Émis par |
 |-----------|---------|----------|
 | `scan:progress` | `{ip, done, total, percent}` | Scanner SNMP |
-| `scan:complete` | `{total, duration_ms}` | Scanner SNMP |
+| `scan:complete` | `{found, responded, no_response, processed, duration}` | Scanner SNMP |
 | `backup:progress` | `{device_id, status, error}` | Gestionnaire backup |
 | `backup:complete` | `{success, failed, duration_ms}` | Gestionnaire backup |
 | `terminal:output` | `{line, error}` | Terminal SSH |

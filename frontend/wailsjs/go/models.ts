@@ -6,12 +6,21 @@ export namespace audit {
 	    device_hostname: string;
 	    status: string;
 	    error_message: string;
+	    backup_id: string;
+	    backup_status: string;
+	    // Go type: time
+	    backup_at?: any;
 	    total_rules: number;
 	    passed: number;
 	    failed: number;
+	    compliant: number;
+	    non_compliant: number;
+	    not_applicable: number;
+	    indeterminate: number;
+	    errors: number;
+	    assessed: number;
 	    score: number;
 	    results: models.AuditResult[];
-	    remediation: string;
 	    // Go type: time
 	    created_at: any;
 	
@@ -26,12 +35,20 @@ export namespace audit {
 	        this.device_hostname = source["device_hostname"];
 	        this.status = source["status"];
 	        this.error_message = source["error_message"];
+	        this.backup_id = source["backup_id"];
+	        this.backup_status = source["backup_status"];
+	        this.backup_at = this.convertValues(source["backup_at"], null);
 	        this.total_rules = source["total_rules"];
 	        this.passed = source["passed"];
 	        this.failed = source["failed"];
+	        this.compliant = source["compliant"];
+	        this.non_compliant = source["non_compliant"];
+	        this.not_applicable = source["not_applicable"];
+	        this.indeterminate = source["indeterminate"];
+	        this.errors = source["errors"];
+	        this.assessed = source["assessed"];
 	        this.score = source["score"];
 	        this.results = this.convertValues(source["results"], models.AuditResult);
-	        this.remediation = source["remediation"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
 	
@@ -361,7 +378,12 @@ export namespace models {
 	    rule_id: string;
 	    rule_name: string;
 	    passed: boolean;
+	    status: string;
+	    category: string;
+	    expected: string;
+	    risk: string;
 	    details: string;
+	    evidence: string;
 	    severity: string;
 	    remediation: string;
 	    // Go type: time
@@ -378,7 +400,12 @@ export namespace models {
 	        this.rule_id = source["rule_id"];
 	        this.rule_name = source["rule_name"];
 	        this.passed = source["passed"];
+	        this.status = source["status"];
+	        this.category = source["category"];
+	        this.expected = source["expected"];
+	        this.risk = source["risk"];
 	        this.details = source["details"];
+	        this.evidence = source["evidence"];
 	        this.severity = source["severity"];
 	        this.remediation = source["remediation"];
 	        this.created_at = this.convertValues(source["created_at"], null);
@@ -406,6 +433,8 @@ export namespace models {
 	    id: string;
 	    name: string;
 	    description: string;
+	    category: string;
+	    risk: string;
 	    pattern: string;
 	    must_match: boolean;
 	    vendor: string;
@@ -424,6 +453,8 @@ export namespace models {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.category = source["category"];
+	        this.risk = source["risk"];
 	        this.pattern = source["pattern"];
 	        this.must_match = source["must_match"];
 	        this.vendor = source["vendor"];
@@ -561,6 +592,7 @@ export namespace models {
 	    model: string;
 	    os_version: string;
 	    location: string;
+	    contact: string;
 	    uptime_seconds: number;
 	    mac_address: string;
 	    serial_number: string;
@@ -593,6 +625,7 @@ export namespace models {
 	        this.model = source["model"];
 	        this.os_version = source["os_version"];
 	        this.location = source["location"];
+	        this.contact = source["contact"];
 	        this.uptime_seconds = source["uptime_seconds"];
 	        this.mac_address = source["mac_address"];
 	        this.serial_number = source["serial_number"];
