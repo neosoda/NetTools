@@ -136,12 +136,13 @@ n'est pas une preuve que la CI distante ou une session desktop Windows a réussi
 | Tests Go backend | 44 tests de premier niveau réussis (78 avec sous-tests), aucun échec |
 | Tests façade applicative | 3 tests réussis via `go test app.go app_inventory_test.go` |
 | `go vet` | Réussi pour `internal/...` sous Linux et `./...` avec cible Windows |
+| Clone contributeur propre | Clone HTTPS de la branche `67b7038` : installation verrouillée, TypeScript, build frontend, tests backend/façade, compilation Windows et bundle de licences réussis ; aucun fichier suivi modifié |
 | Compilation Windows production | Exécutable PE x64 produit par compilation croisée ; non exécuté sous Windows |
 | Sommes Go | `go mod verify` réussi |
 | Govulncheck Windows, 14 packages racines | Aucun symbole vulnérable atteint, aucun paquet importé vulnérable ; 1 alerte de module sur `x/crypto/openpgp`, non importé, sans correctif amont |
 | Gitleaks refs publiques | 0 détection selon les règles ; clé HMAC connue traitée séparément |
 | Notices tierces | Bundle généré, inventaire et références upstream vérifiés |
-| Workflow GitHub | YAML et `actionlint` réussis ; exécution distante à vérifier sur la PR |
+| Workflow GitHub | YAML et `actionlint` réussis ; aucune exécution/check distant observé sur la PR lors de la vérification |
 | Vite démarré | HTML et point d'entrée transformé servis par requêtes locales |
 | Desktop Linux | Non validé : GTK/WebKit absents, installation système refusée par permissions |
 | Équipements réels / exécuteur Netmiko / PDF régénérés | Non testés ; artefacts historiques conservés |
@@ -166,3 +167,19 @@ d'intégrité n'a été désactivée.
   Ce rapport n'est pas une certification juridique ou de sécurité.
 - Le script et les instructions de démarrage cloud sont enregistrés dans le
   brouillon de configuration. Aucun snapshot d'environnement n'est publié.
+
+Les deux manifests npm conservent `private: true` : ce champ évite une
+publication accidentelle sur npm et ne constitue pas une licence propriétaire.
+La séparation public/édition privée dans AGENTS.md est conservée ; elle interdit
+la fuite de contenus privés, pas les contributions génériques sous Apache.
+
+Le push GitHub signale encore des avis Dependabot sur `master`, qui n'a pas
+été modifiée par cette PR. Les résultats de la branche ne prouvent pas que la
+branche par défaut est corrigée. Aucun run ni check CI n'est visible pour la
+PR au moment du contrôle. La lecture des permissions Actions renvoie HTTP 403
+« Resource not accessible by integration » : les réglages ne sont pas modifiés
+et la CI distante reste à faire exécuter/vérifier par le mainteneur.
+
+La clé locale conservée a été vérifiée identique octet pour octet à l'ancienne
+version, sans affichage de sa valeur, et reste ignorée. Le clone propre ne la
+contient pas. L'état suivi du checkout est propre après les commits.
