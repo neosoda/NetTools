@@ -6,24 +6,46 @@ import (
 	"testing"
 )
 
-func TestEvaluateRuleAndExpandRemediation(t *testing.T) {
-	rule := models.AuditRule{Name: "ssh", Pattern: `^service ssh$`, MustMatch: true}
-	passed, _ := evaluateRule(rule, "service ssh\nhostname edge")
-	if !passed {
-		t.Fatal("expected rule to pass")
-	}
-
-	device := models.Device{Hostname: "sw-01", IP: "10.0.0.1", Vendor: "aruba"}
-	got := expandRemediation("hostname {{hostname}}\n! {{ip}} {{vendor}}", device)
-	if !strings.Contains(got, "sw-01") || !strings.Contains(got, "10.0.0.1") {
-		t.Fatalf("unexpected remediation: %q", got)
+func TestRequiredRuleWithoutProofIsIndeterminate(t *testing.T) {
+	result := evaluateRule(models.AuditRule{Pattern: `^service ssh$`, MustMatch: true}, "hostname edge")
+	if result.Status != StatusIndeterminate {
+		t.Fatalf("status = %q, want %q", result.Status, StatusIndeterminate)
 	}
 }
 
-func TestEvaluateMultiPattern(t *testing.T) {
-	rule := models.AuditRule{Pattern: `^ntp server 10\.0\.0\.1$ AND ^ntp server 10\.0\.0\.2$`, MustMatch: true}
-	passed, details := evaluateMultiPattern(rule, "ntp server 10.0.0.1\nntp server 10.0.0.2")
-	if !passed || !strings.Contains(details, "All 2 patterns found") {
-		t.Fatalf("unexpected result: %v %s", passed, details)
+func TestForbiddenPatternProducesEvidence(t *testing.T) {
+	rule := models.AuditRule{Pattern: `^\s*transport input .*telnet\b`, MustMatch: false}
+	result := evaluateRule(rule, "line vty 0 4\n transport input ssh telnet")
+	if result.Status != StatusNonCompliant || !strings.Contains(result.Evidence, "transport input") {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestSensitiveEvidenceIsRedacted(t *testing.T) {
+	rule := models.AuditRule{Pattern: `^snmp-server community.*`, MustMatch: false}
+	result := evaluateRule(rule, "snmp-server community private ro")
+	if result.Status != StatusNonCompliant || strings.Contains(result.Evidence, "private") {
+		t.Fatalf("sensitive evidence leaked: %#v", result)
+	}
+}
+
+func TestInvalidPatternIsTechnicalError(t *testing.T) {
+	result := evaluateRule(models.AuditRule{Pattern: `[`, MustMatch: true}, "hostname edge")
+	if result.Status != StatusError {
+		t.Fatalf("status = %q, want %q", result.Status, StatusError)
+	}
+}
+
+func TestMultiPatternWithoutAllProofIsIndeterminate(t *testing.T) {
+	rule := models.AuditRule{Pattern: `^ntp server one$ AND ^ntp authenticate$`, MustMatch: true}
+	result := evaluateMultiPattern(rule, "ntp server one")
+	if result.Status != StatusIndeterminate {
+		t.Fatalf("status = %q, want %q", result.Status, StatusIndeterminate)
+	}
+}
+
+func TestVendorApplicability(t *testing.T) {
+	if ruleApplies(models.AuditRule{Vendor: "cisco"}, models.Device{Vendor: "aruba"}) {
+		t.Fatal("Cisco rule must not apply to Aruba")
 	}
 }

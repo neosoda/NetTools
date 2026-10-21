@@ -5,12 +5,19 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 - HYPOTHÈSE: l'environnement réel est on-premise, réseau interne, souvent sans dépendance cloud et potentiellement avec accès Internet limité.
 - HYPOTHÈSE: les utilisateurs sont des administrateurs IT autorisés à scanner, auditer et sauvegarder des équipements réseau.
 - HYPOTHÈSE: les équipements prioritaires sont Cisco, Aruba/HPE, HP ProCurve, HPE Comware, Huawei, Fortinet et Allied Telesis.
-- HYPOTHÈSE: l'inventaire est volontairement éphémère au démarrage. Cette règle est fragile et doit être confirmée avant toute persistance durable des devices.
+- État vérifié v1.6.0 : inventaire persistant par défaut ; le paramètre explicite `ephemeral_inventory` demande sa remise à zéro au démarrage.
 - Ambigu: exigences réglementaires exactes, politique de rétention officielle, classification des données, règles RGPD et exigences d'audit interne.
 - Ambigu: seuils de performance acceptables pour les scans, backups concurrents, gros exports Excel/ZIP et topologies volumineuses.
 - Ambigu: stratégie de release, signature binaire, distribution MSI/EXE, canal de mise à jour et politique de compatibilité ascendante.
 - Ambigu: matrice de tests avec équipements réels. Les tests unitaires présents ne couvrent pas toute l'intégration SNMP/SSH.
 - Ambigu: niveau de support attendu pour SNMPv3, clés SSH, commandes destructrices via terminal/playbooks et remediation automatique.
+
+## Documentation de référence
+- Présentation : `README.md`. Utilisation : `NOTICE.md`. Développement : `docs/DEVELOPMENT.md`.
+- Architecture : `docs/ARCHITECTURE.md`. Licences : `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`.
+- Les archives de versions ne décrivent pas nécessairement le produit courant.
+- Topologie et suivi d’utilisation des ports sont retirés du produit public depuis v1.6.0.
+- L’audit fournit des recommandations consultatives sans générer ni exécuter de script de remédiation.
 
 ## Purpose
 - NetTools est une application desktop Windows pour découvrir, inventorier, sauvegarder, auditer et comparer des configurations d'équipements réseau.
@@ -31,8 +38,8 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 ## Target Environment
 - OS cible: Windows 10/11 x64.
 - Runtime desktop: Wails v2 avec WebView2.
-- Runtime backend: Go 1.24.7 selon `go.mod`.
-- Runtime frontend de développement: Node.js 18+ minimum, Vite, React et TypeScript.
+- Runtime backend: Go 1.26.10 (toolchain) selon `go.mod`.
+- Runtime frontend de développement: Node.js 22.22+ minimum, Vite, React et TypeScript.
 - Données applicatives: `%APPDATA%\NetTools\` pour `nettools.db`, `settings.json` et `logs/`.
 - Backups: par défaut dans `%USERPROFILE%\Downloads\NetTools_Backups`, configurable via `settings.json`.
 - Base locale: SQLite via GORM, journal WAL, `busy_timeout=5000`, clés étrangères activées.
@@ -44,7 +51,7 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 
 ## Architecture Overview
 - Backend: Go, package `main` pour la façade Wails, modules métier sous `internal/`.
-- Frontend: React 18, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, Zustand, Radix UI, ReactFlow.
+- Frontend: React 19, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, Zustand et Radix UI.
 - Desktop bridge: Wails expose les méthodes de `App` au frontend et émet des événements runtime pour progression scan, backup, terminal et playbooks.
 - Persistance: SQLite + GORM, modèles dans `internal/db/models`.
 - Secrets: `internal/secret`, DPAPI Windows, fallback AES-256-GCM hors Windows.
@@ -53,7 +60,6 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 - Audit: `internal/audit`, règles regex stockées en base, seed initial et migrations applicatives simples.
 - Diff: `internal/diff`, comparaison de configurations et export HTML.
 - Scheduler: `internal/scheduler`, cron local en mémoire, jobs persistés en base.
-- Topologie: `internal/topology`, graphe construit depuis devices et liens LLDP.
 - Logging: `internal/logger`, zerolog vers stdout, fichiers mensuels et table `audit_logs`.
 - Pattern assumé: façade applicative Wails dans `app.go`, logique isolée autant que possible dans `internal/*`.
 - Volontairement simple: pas de backend HTTP, pas de service distant, pas d'authentification multi-utilisateur, pas de migration SQL sophistiquée.
@@ -66,7 +72,7 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 - Les structs `CredentialView` et champs `json:"-"` des secrets sont des garde-fous. Ne pas les contourner.
 - Les fichiers générés `frontend/wailsjs/**` ne doivent pas être modifiés à la main.
 - Les données utilisateur restent locales. Toute synchronisation cloud requiert une décision explicite.
-- L'inventaire est actuellement réinitialisé au démarrage. Ne pas changer ce comportement sans décision produit explicite.
+- Conserver l’inventaire persistant par défaut et le mode éphémère facultatif ; tout changement exige une décision produit explicite.
 - Les backups doivent conserver un hash SHA256 et une trace en base.
 - Les exports ZIP doivent valider l'intégrité des fichiers ajoutés.
 - Les opérations réseau doivent avoir timeout, gestion d'erreur et journalisation minimale.
@@ -156,7 +162,7 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 - Events Wails pour progression → feedback utilisateur direct → alternatives rejetées: polling pur → trade-off: contrat implicite entre backend et frontend.
 - Dette consciente: couverture de tests faible sur SNMP/SSH réel, playbooks, scheduler et intégration Wails.
 - Dette consciente: README et docs existants semblent encodés avec caractères corrompus. Ne pas propager cette corruption dans de nouveaux fichiers.
-- À revalider: persistance de l'inventaire, politique de rétention, chiffrement des backups, signature des releases, matrice vendors, exigences RGPD.
+- À revalider: politique de rétention, chiffrement des backups, signature des releases, matrice vendors, exigences RGPD.
 
 ## How to Extend Safely
 - Ajouter une capacité backend pure dans le module `internal/<domain>` correspondant.

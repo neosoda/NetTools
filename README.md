@@ -1,504 +1,184 @@
 <div align="center">
 
-![NetTools Logo](frontend/src/assets/images/logo.png)
+<img src="frontend/src/assets/images/icon.png" alt="Logo NetTools" width="120" />
 
 # NetTools
 
-**Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
+**Découvrir son réseau. Sauvegarder ses configurations. Auditer avec des preuves.**
 
-[![GitHub release](https://img.shields.io/badge/Version-1.4.1-blue?logo=github)](../../releases)
-[![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
-[![Go Version](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](https://golang.org)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
+Application desktop Windows pour les administrateurs réseau, développée avec Go, Wails et React.
 
-[Télécharger](#-téléchargement) • [Documentation](#-documentation) • [Fonctionnalités](#-fonctionnalités) • [Contribution](#-contribution)
+[![Licence Apache 2.0](https://img.shields.io/badge/Licence-Apache%202.0-blue)](LICENSE)
+[![Version publiée](https://img.shields.io/github/v/release/neosoda/NetTools?label=Version)](https://github.com/neosoda/NetTools/releases)
+[![Go](https://img.shields.io/badge/Go-1.26.10-00ADD8?logo=go&logoColor=white)](go.mod)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](frontend/package.json)
+[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4)](#installer-nettools)
 
-</div>
-
----
-
-## 🚀 À propos
-
-**NetTools** est une application desktop puissante conçue pour simplifier la gestion réseau et l'audit de conformité. Avec une interface moderne et intuitive, elle offre aux administrateurs IT tous les outils nécessaires pour :
-
-- 🔍 **Découvrir** les équipements réseau automatiquement
-- 💾 **Sauvegarder** les configurations en un clic
-- ✅ **Auditer** la conformité avec 22 règles prédéfinies
-- 📊 **Comparer** et analyser les configurations
-- 🎯 **Automatiser** les tâches avec des playbooks
-- 📈 **Visualiser** la topologie réseau
-
----
-
-## ✨ Fonctionnalités principales
-
-<table>
-<tr>
-<td width="50%">
-
-### 🔗 Découverte Réseau
-- Scan **SNMP v1/v2c/v3 USM** rapide et fiable
-- Niveaux SNMPv3 : **noAuthNoPriv**, **authNoPriv**, **authPriv**
-- Authentification MD5, SHA-1 et SHA-2 ; chiffrement DES et AES-128/192/256
-- Saisie manuelle ou import d'IPs
-- Collecte automatique de métadonnées
-- Export **Excel** formaté et professionnel
-- Progression en temps réel
-- **Bouton STOP** pour arrêt instantané
-
-</td>
-<td width="50%">
-
-### 💾 Gestion des Backups
-- Backup SSH des configurations
-- Support **multi-vendor** (Cisco, Aruba, HP, etc.)
-- Terminal SSH intégré pour commandes customs
-- Historique avec hash SHA256
-- Export ZIP des sauvegardes
-- Visualisation des configurations
-
-</td>
-</tr>
-
-<tr>
-<td width="50%">
-
-### ✅ Audit de Conformité
-- **22 règles prédéfinies** personnalisables
-- Sévérités : critique → faible
-- Score en % avec barre de progression
-- Diagnostic enrichi des écarts
-- Détection automatique des patterns
-- Filtrage par fabricant
-
-</td>
-<td width="50%">
-
-### 🔄 Comparateur de Configuration _(v1.3.2)_
-- **Vue Split** avec scroll synchronisé
-- Diff **sémantique** : détecte changements vs insertions
-- Code couleur : 🟢 insertion · 🔴 suppression · 🟡 modification
-- **Diff only** : masque les lignes inchangées
-- Toggle Split/Unifié pour vue alignée
-- Stats enrichies : +/−/~/= lignes
-- Ignorer des patterns (regex)
-- Comparaison entre deux backups
-- Export **HTML** standalone
-
-</td>
-</tr>
-
-<tr>
-<td width="50%">
-
-### 🎯 Playbooks SSH
-- Exécution multi-équipements
-- Modèles YAML prêts à l'emploi
-- Terminal temps réel intégré
-- **4 templates** : inventaire, sécurité, VLAN, diagnostic
-- **Smart Syntax Agent** : Auto-correction intelligente (ex: `vlan database` automatique)
-- Gestion d'erreurs et expectations
-- Résultats pas-à-pas
-
-</td>
-<td width="50%">
-
-### 📅 Planificateur
-- Interface **calendrier + horloge**
-- Fréquences : horaire → mensuel
-- Mode avancé (expressions cron)
-- Activation/désactivation à la volée
-- Tâches : Backup, Scan
-- Aperçu en français
-
-</td>
-</tr>
-
-<tr>
-<td width="50%">
-
-### 📊 Topologie Réseau
-- Visualisation graphique (ReactFlow)
-- Couleurs par fabricant
-- Icônes PoE automatiques
-- Détection LLDP
-- Layout interactif
-
-</td>
-<td width="50%">
-
-### 📝 Journaux & Inventaire _(v1.3.2)_
-- **Inventaire stateless** : vide à chaque lancement
-- Import/Export JSON explicites (boutons ↑↓)
-- Événements cliquables avec contexte modal
-- Lecteur de fichiers `.log` mensuels
-- Gestion CRUD équipements + test SSH
-- Nettoyage rapide (Eraser) avec confirmation
-
-</td>
-</tr>
-
-<tr>
-<td width="50%">
-
-### 🔐 Gestion des Credentials _(v1.4.0)_
-- **Auto-activation** : nouveau credential complet = automatiquement actif
-- Badge **ACTIF** dans la liste des credentials
-- Support multi-protocoles : SSH, password, SNMP v1/v2c/v3 USM
-- Secrets SNMPv3 chiffrés utilisés par le scan, LLDP et le diagnostic ciblé
-- Chiffrement DPAPI (Windows) ou AES-256-GCM
-- Suppression du credential actif = réinitialisation propre
-- Édition et rotation simplifiées
-
-</td>
-<td width="50%">
-
-</td>
-</tr>
-</table>
-
----
-
-## 🛠️ Stack Technologique
-
-```
-┌─────────────────────────────────────────────┐
-│           NetTools Architecture             │
-├─────────────────────────────────────────────┤
-│                                             │
-│  ┌──────────────────────────────────────┐  │
-│  │  Frontend (React 19 + TypeScript)    │  │
-│  │  • TailwindCSS                       │  │
-│  │  • React Router                      │  │
-│  │  • React Query                       │  │
-│  │  • ReactFlow (topologie)             │  │
-│  └──────────────────────────────────────┘  │
-│                   ↕️                        │
-│  ┌──────────────────────────────────────┐  │
-│  │  Wails v2 (Desktop Framework)        │  │
-│  │  • WebView2 Runtime                  │  │
-│  │  • IPC Bridge                        │  │
-│  └──────────────────────────────────────┘  │
-│                   ↕️                        │
-│  ┌──────────────────────────────────────┐  │
-│  │  Backend (Go 1.26.5)                 │  │
-│  │  • SNMP (gosnmp)                     │  │
-│  │  • SSH (x/crypto/ssh)                │  │
-│  │  • SQLite + GORM                     │  │
-│  │  • Scheduler (robfig/cron)           │  │
-│  │  • Excelize (Excel export)           │  │
-│  └──────────────────────────────────────┘  │
-│                   ↕️                        │
-│  ┌──────────────────────────────────────┐  │
-│  │  SQLite (Database)                   │  │
-│  │  • Mode WAL                          │  │
-│  │  • Chiffrement DPAPI (Windows)       │  │
-│  └──────────────────────────────────────┘  │
-│                                             │
-└─────────────────────────────────────────────┘
-```
-
-| Composant | Technologie | Rôle |
-|-----------|------------|------|
-| **Frontend** | React 19 + TypeScript | Interface moderne et réactive |
-| **Desktop** | Wails v2 | Framework de distribution |
-| **Backend** | Go 1.26.5 | Logique métier et communications |
-| **Database** | SQLite + GORM | Persistance des données |
-| **Réseau** | gosnmp, x/crypto/ssh | SNMP et SSH |
-| **UI Framework** | TailwindCSS | Design responsive |
-| **Export** | excelize v2 | Génération Excel |
-| **Scheduling** | robfig/cron v3 | Planification des tâches |
-| **Chiffrement** | DPAPI / AES-256-GCM | Sécurisation des credentials |
-| **Logs** | zerolog | Journalisation structurée |
-
----
-
-## 📥 Téléchargement
-
-<div align="center">
-
-### [⬇️ Télécharger NetTools v1.4.1](../../releases/download/v1.4.1/NetTools_v1.4.1.exe)
-
-**Windows 10/11 • 64-bit • ~20 MB**
+[Télécharger](https://github.com/neosoda/NetTools/releases/latest) · [Guide utilisateur](NOTICE.md) · [Documentation](docs/README.md) · [Contribuer](CONTRIBUTING.md) · [Sécurité](SECURITY.md)
 
 </div>
 
-### Installation
+## Un poste de travail pour l'administration réseau
 
-1. Téléchargez `NetTools.exe` depuis la [page Releases](../../releases)
-2. Double-cliquez sur l'exécutable
-3. L'application crée automatiquement ses dossiers de données dans :
+NetTools rassemble la découverte SNMP, l'inventaire, les sauvegardes SSH et
+l'analyse de configurations dans une interface locale. Il s'adresse aux
+administrateurs qui souhaitent conserver leurs données et leurs fichiers sur
+leur poste ou dans un dossier de sauvegarde de leur choix, sans service cloud
+obligatoire.
+
+Le code original de cette branche est sous **Apache 2.0**. Les dépendances et
+ressources conservent leurs licences respectives. Les binaires déjà publiés
+restent associés aux conditions et au code de leur version : cette migration
+ne constitue pas une nouvelle release. Voir les [licences](#licences-et-attributions).
+
+## Ce que permet NetTools
+
+| Module | Fonctions |
+| --- | --- |
+| **Découverte** | SNMP v1/v2c/v3 USM, modes Switches et Complet, CIDR, plages et listes IPv4, import TXT/CSV, export Excel. Les cibles sont validées, dédupliquées et limitées à 1 024 par scan. |
+| **Inventaire** | Ajout manuel, découverte et import JSON ; fusion par adresse IP et conservation entre les sessions par défaut. Mode éphémère facultatif dans les paramètres. |
+| **Backups** | Collecte SSH multi-constructeur, historique, contrôle SHA-256, qualité de capture, consultation des configurations et export ZIP. |
+| **Comparateur** | Comparaison de textes ou de sauvegardes, vues côte à côte et unifiée, filtres et export HTML. |
+| **Audit** | Contrôles génériques et constructeur, preuves contextualisées, conclusions explicites et recommandations consultatives. Une sauvegarde absente ou non exploitable ne permet pas de conclure. |
+| **Playbooks** | Séquences YAML sur les équipements sélectionnés, sorties d'exécution et gestion des erreurs. Exécuteur natif et option Netmiko. |
+| **Planificateur** | Programmation de scans, backups, audits, playbooks et commandes SSH selon le type et les paramètres choisis. |
+| **Journaux et paramètres** | Événements, fichiers de logs, profils SSH/SNMP, dossier de sauvegarde et rétention des journaux. |
+
+La topologie et le suivi d'utilisation des ports ont été retirés du produit
+public en v1.6.0. Les recommandations d'audit ne génèrent ni n'exécutent de
+script de remédiation. Le catalogue de règles évolue : il ne constitue pas une
+certification de conformité à une norme.
+
+### Équipements et protocoles
+
+Les chemins de sauvegarde couvrent notamment Cisco IOS/XE, Aruba AOS-S,
+HP ProCurve, HPE Comware, Huawei VRP, Fortinet FortiOS et AlliedWare Plus.
+La commande et le mode SSH dépendent du constructeur ; la compatibilité doit
+être vérifiée sur le modèle, le firmware et les privilèges réellement utilisés.
+Les essais automatisés ne remplacent pas cette validation matérielle.
+
+## Installer NetTools
+
+**Prérequis :** Windows 10/11 x64 et Microsoft Edge WebView2 Runtime.
+Si WebView2 manque, utilisez le [téléchargement officiel Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
+
+1. Ouvrez la [dernière release](https://github.com/neosoda/NetTools/releases/latest).
+2. Téléchargez `NetTools.exe` et le fichier `.sha256` de la même version.
+3. Comparez l'empreinte avant de lancer l'application :
+
+   ```powershell
+   Get-FileHash .\NetTools.exe -Algorithm SHA256
+   Get-Content .\NetTools.exe.sha256
    ```
-   %APPDATA%\NetTools\
-   ├── nettools.db          (Base de données SQLite)
-   ├── backups/                 (Configurations sauvegardées)
-   ├── logs/                    (Journaux mensuels)
-   └── settings.json            (Préférences utilisateur)
-   ```
 
-L'inventaire est **stateless** : il repart vide à chaque lancement. Utilisez les boutons d'**export/import JSON** de la page Inventaire si vous voulez conserver une liste d'équipements entre deux sessions.
+4. Lancez l'exécutable, puis créez vos profils SSH/SNMP dans **Paramètres**.
 
-### Prérequis
+Une somme de contrôle vérifie la concordance avec le fichier publié ; elle ne
+constitue pas une signature indépendante de l'éditeur.
 
-- **Windows 10/11** (64-bit)
-- **WebView2 Runtime** (inclus dans Windows 11, [télécharger pour W10](https://developer.microsoft.com/en-us/microsoft-edge/webview2))
+Les données SQLite, les préférences et les logs sont conservés dans
+`%APPDATA%\NetTools\`. Les backups sont enregistrés par défaut dans
+`%USERPROFILE%\Downloads\NetTools_Backups\`, avec un dossier personnalisable.
+L'inventaire reste présent au redémarrage, sauf activation du mode éphémère.
 
----
+## Premier parcours
 
-## 🚀 Démarrage rapide
+1. **Paramètres** : créez un profil et choisissez le credential actif.
+2. **Découverte** : indiquez uniquement des cibles pour lesquelles vous avez
+   une autorisation, puis lancez le scan.
+3. **Inventaire** : contrôlez les équipements, leurs métadonnées et leurs accès.
+4. **Backups** : récupérez les configurations et vérifiez le résultat de capture.
+5. **Audit** : examinez les preuves, les statuts et les recommandations.
+6. **Comparateur** : comparez deux états avant ou après une maintenance.
 
-### 1️⃣ Découvrir des équipements
+Le [guide utilisateur](NOTICE.md) détaille chaque écran, les données locales,
+les automatisations et le dépannage.
 
-```
-Scan → Entrer plage CIDR (10.0.0.0/24) → Lancer → Export Excel
-```
+## Développer et compiler
 
-### 2️⃣ Sauvegarder les configurations
+Le workflow produit cible **Windows**. Les contrôles backend et frontend
+peuvent aussi être exécutés sous Linux ; une application Wails Linux demande
+des bibliothèques GTK/WebKit et une session graphique.
 
-```
-Backups → Sélectionner équipements → Récupérer depuis scan → Exécuter
-```
-
-### 3️⃣ Auditer la conformité
-
-```
-Audit → Choisir règles → Sélectionner configurations → Analyser → Voir résultats
-```
-
-### 4️⃣ Comparer deux configurations
-
-```
-Comparateur → Sélectionner 2 backups → Configurer filtres → Exporter HTML
-```
-
----
-
-## 📖 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [NOTICE.md](./NOTICE.md) | Source de la notice utilisateur complète |
-| [tools/notice_rendered.html](./tools/notice_rendered.html) | Rendu HTML de la notice prêt à relire dans un navigateur |
-| [go.mod](./go.mod) | Dépendances Go |
-| [Architecture](#architecture) | Structure du projet |
-
-Pour régénérer les notices après modification :
+| Outil | Version utilisée |
+| --- | --- |
+| Go | 1.26.10, toolchain déclarée dans `go.mod` |
+| Node.js | 22.22+ ; Node 24 utilisé dans la CI |
+| npm | Installation via `npm ci --legacy-peer-deps` |
+| Wails CLI et module | 2.11.0 |
 
 ```bash
-python tools/generate_notice_pdf.py
-```
-
-### Supports Multi-Vendor
-
-| Vendor | Commande Backup | Support |
-|--------|-----------------|---------|
-| **Cisco IOS/XE** | `show running-config` | ✅ Exec (préféré) |
-| **Aruba AOS-S** | `show running-config` | ✅ Interactive PTY |
-| **HP ProCurve** | `show running-config` | ✅ Interactive |
-| **HPE Comware** | `display current-configuration` | ✅ Interactive |
-| **Huawei VRP** | `display current-configuration` | ✅ Interactive |
-| **Fortinet FortiOS** | `show full-configuration` | ✅ Exec |
-| **Allied Telesis** | `show running-config` | ✅ Smart CLI (Auto-fix) |
-
----
-
-## 🏗️ Architecture
-
-```
-nettools/
-├── 📄 app.go                      # API principale (méthodes Wails exposées)
-├── 📄 main.go                     # Point d'entrée
-│
-├── 📁 internal/
-│   ├── db/                        # SQLite + modèles GORM
-│   ├── snmp/                      # Scanner SNMP + mapping OID (70+ équipements)
-│   ├── ssh/                       # Pool de workers SSH
-│   ├── backup/                    # Gestionnaire de backups
-│   ├── audit/                     # Moteur de conformité
-│   ├── diff/                      # Comparateur de configurations
-│   ├── playbook/                  # Exécuteur de playbooks YAML
-│   ├── scheduler/                 # Planificateur cron
-│   ├── topology/                  # Constructeur de topologie
-│   ├── logger/                    # Logs fichier + base de données
-│   └── secret/                    # Chiffrement credentials (DPAPI/AES)
-│
-├── 📁 frontend/
-│   ├── src/
-│   │   ├── pages/                 # Pages React (Scan, Backup, Audit, etc.)
-│   │   ├── components/            # Composants réutilisables
-│   │   ├── context/               # Context API (gestion d'état global)
-│   │   └── assets/                # Logo, icône
-│   └── index.html                 # Point d'entrée HTML
-│
-├── 📁 build/
-│   └── bin/
-│       └── NetTools.exe           # Binaire production
-│
-├── 📄 go.mod                      # Dépendances Go
-├── 📄 wails.json                  # Configuration Wails
-└── 📄 Makefile                    # Commandes build/test
-```
-
----
-
-## 💻 Développement
-
-### Prérequis
-
-- **Go 1.26.5+**
-- **Node.js 22.22+**
-- **Wails CLI v2** : `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- **Git**
-
-### Installer les dépendances
-
-```bash
-# Go + dépendances
+git clone https://github.com/neosoda/NetTools.git
+cd NetTools
 go mod download
-
-# Frontend
-cd frontend && npm install --legacy-peer-deps
-```
-
-### Mode développement (hot-reload)
-
-```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+npm ci --prefix frontend --legacy-peer-deps
+npm run typecheck
+npm run build:frontend
+npm test
 wails dev
 ```
 
-L'application se lance avec accès aux DevTools (F12).
+Ajoutez le dossier `bin` de `go env GOPATH` au `PATH` pour utiliser Wails.
+Pour compiler l'exécutable Windows depuis Windows : `npm run build`.
+La sortie est `build/bin/NetTools.exe`.
 
-### Build production
+Les commandes par plateforme, le mode frontend seul, les contrôles de sécurité
+et la génération des notices sont dans le [guide de développement](docs/DEVELOPMENT.md).
 
-```bash
-wails build
+## Comprendre le dépôt
+
+```text
+app.go / main.go          Façade applicative et démarrage Wails
+internal/                SNMP, SSH, backups, audit, SQLite, secrets et planificateur
+frontend/src/            Écrans React, composants et appels au backend
+frontend/wailsjs/        Bindings et runtime générés par Wails
+build/                   Ressources Windows et modèles de packaging
+.github/                 Workflows, modèles de contribution et Dependabot
+docs/                    Documentation développeur et rapport d'audit
+tools/                   Génération des notices, licences et diagnostics
+LICENSE / NOTICE         Licence du projet et attributions légales
+NOTICE.md                Guide utilisateur de référence
 ```
 
-Binaire généré : `build/bin/NetTools.exe`
+Voir l'[architecture](docs/ARCHITECTURE.md) pour les flux, les responsabilités
+et les limites de la séparation frontend/backend.
 
-### Tests
+## Contribuer et obtenir de l'aide
 
-```bash
-# Tests unitaires
-go test ./internal/... -v
+Les corrections, tests, traductions et améliorations de documentation sont
+bienvenus. Commencez par [CONTRIBUTING.md](CONTRIBUTING.md), puis ouvrez une
+issue ou une PR ciblée vers `master`. Le projet suit un
+[code de conduite](CODE_OF_CONDUCT.md) ; aucune PR n'est fusionnée automatiquement.
 
-# Avec couverture
-go test ./internal/... -coverprofile=coverage.out
-go tool cover -html=coverage.out
-```
+- **Bug ou proposition :** [modèles d'issues](https://github.com/neosoda/NetTools/issues/new/choose).
+- **Question d'installation ou diagnostic :** [guide de support](SUPPORT.md).
+- **Vulnérabilité :** procédure confidentielle dans [SECURITY.md](SECURITY.md).
+- **Évolutions publiées :** [CHANGELOG.md](CHANGELOG.md) et [releases](https://github.com/neosoda/NetTools/releases).
 
-### Linting
+N'incluez jamais de credentials, sauvegarde réelle, adresse interne sensible
+ou contenu de l'édition privée dans une contribution publique.
 
-```bash
-# Go
-golangci-lint run ./...
+## Sécurité et limites
 
-# Frontend TypeScript
-cd frontend && npx tsc --noEmit
-```
+NetTools traite des configurations et des accès sensibles. Le stockage des
+credentials utilise DPAPI sous Windows ; hors Windows, le fallback AES dépend
+de sa configuration et n'offre pas une protection forte avec le seul nom d'hôte.
+Les clés d'hôte SSH ne sont actuellement pas vérifiées. Les exports, backups
+et logs doivent être traités comme des données sensibles.
 
----
+Consultez [SECURITY.md](SECURITY.md) avant un déploiement. Les tests et scanners
+ne constituent pas une garantie de sécurité, de disponibilité ou de conformité.
 
-## 🔐 Sécurité
+## Licences et attributions
 
-### Stockage des Credentials
+Copyright 2026 neosoda. Le code original NetTools est sous
+[Apache License 2.0](LICENSE). Les polices Inter et Nunito restent sous OFL 1.1,
+le runtime Wails sous MIT et les autres composants sous leurs licences propres.
 
-- **Windows** : DPAPI (Data Protection API) - chiffrement au niveau du système
-- **Fallback** : AES-256-GCM avec seed dérivée du hostname
+- [NOTICE](NOTICE) : attributions du projet.
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) : obligations des composants tiers.
+- [Inventaire des dépendances](docs/dependency-license-inventory.json).
+- [Rapport d'audit et conditions de publication](docs/OPEN_SOURCE_AUDIT.md).
 
-### Bonnes pratiques
-
-✅ Les mots de passe ne sont jamais stockés en clair
-✅ Communication SSH chiffrée (crypto/ssh standard)
-✅ Base de données SQLite locale (pas de cloud)
-✅ Logs sensibles masqués en production
-
----
-
-## 📊 Cas d'usage
-
-### 🏢 Inventaire Réseau
-
-Découvrir et documenter automatiquement tous les équipements d'un site :
-
-```
-Scan SNMP → Export Excel → Import dans CMDB
-```
-
-### 🔒 Audit de Sécurité
-
-Vérifier la conformité de 22 règles de sécurité :
-
-```
-Audit → Générer rapport → Identifier écarts → Corriger → Re-auditer
-```
-
-### 🔄 Migration de Configuration
-
-Comparer avant/après une mise à jour :
-
-```
-Backup T0 → Mise à jour → Backup T1 → Comparateur → Rapport HTML
-```
-
-### 🤖 Automatisation
-
-Exécuter des tâches répétitives via playbooks :
-
-```
-Créer playbook → Définir étapes → Sélectionner équipements → Exécuter → Résultats
-```
-
----
-
-## 🐛 Signaler un bug
-
-1. Vérifiez que le bug n'existe pas déjà dans [Issues](../../issues)
-2. Créez une nouvelle [Issue](../../issues/new) avec :
-   - Description claire du problème
-   - Étapes pour reproduire
-   - Logs (dans `%APPDATA%\NetTools\logs\`)
-   - Équipements affectés
-
----
-
-## 💡 Contribuer
-
-Les contributions sont bienvenues ! Pour contribuer :
-
-1. Fork le projet
-2. Créez une branche feature : `git checkout -b feature/ma-fonctionnalité`
-3. Commitez vos changements : `git commit -m "feat: description"`
-4. Poussez vers la branche : `git push origin feature/ma-fonctionnalité`
-5. Ouvrez une Pull Request
-
-**Avant de contribuer**, consultez [CONTRIBUTING.md](./CONTRIBUTING.md).
-
----
-##🙏 Crédits
-
-NetTools est l'évolution du script original decouverte2.4.py créé par Emmanuel. Merci pour cette base solide qui m'a inspiré ! 🙌
-
----
-
-## 📜 Licence & Dépendances
-
-Ce projet utilise plusieurs bibliothèques open source.
-Voir [NOTICE.md](./NOTICE.md) pour la liste complète des dépendances et licences.
-
----
-
-<div align="center">
-
-### 💬 Questions ?
-
-Consultez la [documentation](./NOTICE.md) ou créez une [Issue](../../issues)
-
----
-
-**Fait avec ❤️ par [neosoda](https://github.com/neosoda)**
-
-*Wails • Go • React • TypeScript*
-
-</div>
+`NOTICE.md` est un manuel utilisateur ; il ne remplace pas le fichier légal `NOTICE`.

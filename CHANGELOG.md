@@ -6,6 +6,80 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [Non publié]
+
+### Documentation et contribution
+
+- Migration proposée du code original sous Apache 2.0, avec conservation des attributions tierces.
+- README et manuel réécrits autour du périmètre courant : inventaire persistant par défaut, audit fondé sur les preuves et recommandations consultatives.
+- Guides de développement, architecture et support, notices HTML synchronisées et outils de génération hors ligne.
+- Modèles GitHub, code de conduite, politique de sécurité et contrôles CI ajoutés.
+- Commandes npm, Makefile et configuration Wails alignées sur l'installation verrouillée et les vérifications documentées.
+
+### Sécurité et maintenance
+
+- Toolchain Go et dépendances mises à jour dans la branche de migration ; détail et réserves dans `docs/OPEN_SOURCE_AUDIT.md`.
+- Ancienne clé HMAC Sentinel retirée du suivi avec autorisation et déclarée compromise, sans réécriture d'historique ; rotation externe requise avant toute nouvelle signature.
+
+Cette section décrit des modifications en préparation, sans annoncer une nouvelle release ni modifier les conditions des anciennes versions.
+
+## [1.6.0] - 2026-10-16
+
+### Ajouts
+- **Découverte SNMP** : ciblage CIDR, plages et listes d'adresses avec validation, déduplication et plafond de 1 024 cibles ; import TXT/CSV et restitution distincte des réponses et absences de réponse.
+- **Inventaire** : persistance SQLite, fusion des imports, déduplication et conservation des métadonnées de découverte.
+- **Audit de conformité** : conclusions explicites `conforme`, `non conforme`, `non applicable`, `indéterminé` et `erreur`, accompagnées de preuves contextualisées et d'un score limité aux contrôles évaluables.
+
+### Changements
+- Retrait des modules Port Tracker / utilisation des ports et Topologie du produit public.
+- Le catalogue d'audit est recentré sur des contrôles génériques et constructeur vérifiables (Cisco, Aruba, AlliedWare Plus, Huawei et Fortinet). Les règles historiques livrées qui portaient des hypothèses de déploiement sont désactivées, sans suppression des données ni des règles créées par l'utilisateur.
+- Les recommandations d'audit sont consultatives : NetTools ne génère ni n'exécute de script de remédiation.
+- L'audit utilise la dernière sauvegarde et refuse de conclure si elle est absente, `suspect` ou `failed`.
+
+### Sécurité
+- Les preuves et recommandations d'audit masquent les éléments de configuration sensibles.
+- Les dépendances npm auditées ne signalent aucune vulnérabilité au moment de cette release.
+
+### Validation
+- Tests ciblés Go, vérification TypeScript, build frontend et compilation Wails Windows de production.
+- Aucun scan réseau ni connexion SSH n'a été exécuté pendant la préparation de cette release.
+
+## [1.5.2] - 2026-10-14
+
+### Corrigé
+- **Backups Allied Telesis** : passage au mode privilégié `#` par `enable` dans le repli interactif lorsqu'une session démarre au prompt `>` ; erreur explicite si ce passage est refusé ou nécessite une authentification supplémentaire.
+- **Lecture SSH** : réponse délimitée par commande, prompt appris pour les backups, suppression des fins prématurées sur marqueur ou silence et traitement des fermetures de canal.
+- **Pagination Allied** : prise en charge de `--More--`, `<cr>` et `Press any key` en dernière ligne de terminal ; un acquittement par occurrence, sans réagir aux tokens contenus dans les lignes de configuration.
+- **Erreurs SSH** : propagation des erreurs d'écriture, annulations et limites ; attente exec bornée ; traitement d'une fermeture propre sans statut distant ; erreurs CLI détectées avant nettoyage.
+- **Sortie terminal** : conservation des séparateurs CR-only et reconnaissance des prompts après nettoyage ANSI.
+
+### Ajouts
+- Diagnostics de récupération corrélés par backup, sans secrets ni contenu de configuration.
+- Analyse de l'historique SSH, tests de non-régression et utilitaire isolé de diagnostic en lecture seule.
+
+### Validation
+- Tests Go, contrôles statiques et compilation Windows de production.
+- Récupération SSH vérifiée sur deux switches Allied, avec exec et le repli interactif corrigé. Ces essais ne valident pas tous les modèles/firmwares ni tous les échecs historiques.
+
+---
+
+## [1.5.1] - 2026-10-11
+
+### Ajouts
+- **Port Tracker** :
+  - Mapping équipement (Hostname / IP) enrichi sur chaque port avec colonne dédiée dans le tableau.
+  - Filtre interactif par commutateur / switch pour isoler rapidement les interfaces.
+  - Export CSV complet au format UTF-8 avec BOM (RFC 4180) pour ouverture directe dans Excel.
+- **Gestion des Backups** :
+  - Cartes métriques récapitulatives d'état (Total, Succès, Échecs, Dernier backup).
+  - Indicateur visuel d'intégrité SHA256 avec infobulle du hash sur chaque sauvegarde.
+  - Bouton d'export d'archive ZIP vérifiée (`ExportBackupsZip`).
+- **SNMPv3 USM** :
+  - Bouton « Tester » sur chaque profil d'identification SNMP configuré dans les Paramètres.
+  - Modal interactif de diagnostic en direct avec test de connectivité et rapport détaillé (`TestSNMPHostWithCredential`).
+
+---
+
 ## [1.5.0] - 2026-08-29
 
 ### Ajouts

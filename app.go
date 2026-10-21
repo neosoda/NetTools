@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -18,14 +19,12 @@ import (
 	"nettools/internal/db"
 	"nettools/internal/db/models"
 	"nettools/internal/diff"
-	"nettools/internal/porttracker"
 	"nettools/internal/logger"
 	"nettools/internal/playbook"
 	"nettools/internal/scheduler"
 	"nettools/internal/secret"
 	"nettools/internal/snmp"
 	"nettools/internal/ssh"
-	"nettools/internal/topology"
 
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -90,9 +89,9 @@ func (a *App) startup(ctx context.Context) {
 		backupDir = filepath.Join(homeDir, "Downloads", "NetTools_Backups")
 	}
 	// Load saved settings and apply custom backup dir if configured
+	var saved AppSettings
 	settingsPath := filepath.Join(a.dataDir, "settings.json")
 	if data, err := os.ReadFile(settingsPath); err == nil {
-		var saved AppSettings
 		if json.Unmarshal(data, &saved) == nil && saved.BackupDir != "" {
 			backupDir = saved.BackupDir
 		}
@@ -106,12 +105,13 @@ func (a *App) startup(ctx context.Context) {
 	})
 	a.sched.Start(ctx)
 
-	// Inventory is stateless – clear all devices on every launch
-	if db.Ready() {
+	// Persistent inventory is the default. The legacy ephemeral behavior remains
+	// an explicit, opt-in setting for environments that require it.
+	if saved.EphemeralInventory && db.Ready() {
 		if err := db.DB.Where("1 = 1").Delete(&models.Device{}).Error; err != nil {
-			logger.Error("failed to reset inventory on startup", err)
+			logger.Error("failed to reset ephemeral inventory on startup", err)
 		} else {
-			logger.Info("Inventaire réinitialisé (mode stateless)")
+			logger.Info("Inventaire réinitialisé (mode éphémère activé)")
 		}
 	}
 
@@ -187,6 +187,12 @@ func (a *App) GetDevice(id string) (*models.Device, error) {
 func (a *App) SaveDevice(device models.Device) (*models.Device, error) {
 	if device.ID == "" {
 		device.ID = uuid.NewString()
+		var existing models.Device
+		if err := db.DB.Where("ip = ?", device.IP).First(&existing).Error; err == nil {
+			return nil, fmt.Errorf("un équipement avec l'adresse %s existe déjà", device.IP)
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
 		if err := db.DB.Create(&device).Error; err != nil {
 			return nil, err
 		}
@@ -238,7 +244,7 @@ func (a *App) ExportInventoryJSON() error {
 	return os.WriteFile(savePath, data, 0644)
 }
 
-// ImportInventoryJSON opens an open dialog, reads a JSON file and replaces the inventory.
+// ImportInventoryJSON opens an open dialog and merges JSON devices into the inventory.
 func (a *App) ImportInventoryJSON() (int, error) {
 	openPath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:   "Importer un inventaire",
@@ -255,23 +261,157 @@ func (a *App) ImportInventoryJSON() (int, error) {
 	if err := json.Unmarshal(data, &devices); err != nil {
 		return 0, fmt.Errorf("format JSON invalide: %w", err)
 	}
-	// Replace current inventory
-	if err := db.DB.Where("1 = 1").Delete(&models.Device{}).Error; err != nil {
+	imported, err := mergeImportedDevices(db.DB, devices)
+	if err != nil {
 		return 0, err
-	}
-	imported := 0
-	for i := range devices {
-		if devices[i].ID == "" {
-			devices[i].ID = uuid.NewString()
-		}
-		if err := db.DB.Create(&devices[i]).Error; err != nil {
-			logger.Error("import device error", err)
-			continue
-		}
-		imported++
 	}
 	logger.AuditAction(a.ctx, "inventory_imported", "device", "all", openPath, "success", 0)
 	return imported, nil
+}
+
+func mergeImportedDevices(database *gorm.DB, devices []models.Device) (int, error) {
+	imported := 0
+	seenIPs := make(map[string]struct{}, len(devices))
+
+	err := database.Transaction(func(tx *gorm.DB) error {
+		for _, importedDevice := range devices {
+			importedDevice.IP = strings.TrimSpace(importedDevice.IP)
+			if importedDevice.IP == "" {
+				continue
+			}
+			if _, alreadyHandled := seenIPs[importedDevice.IP]; alreadyHandled {
+				continue
+			}
+			seenIPs[importedDevice.IP] = struct{}{}
+
+			var existing models.Device
+			err := tx.Where("ip = ?", importedDevice.IP).First(&existing).Error
+			switch {
+			case err == nil:
+				merged := mergeImportedDevice(existing, importedDevice)
+				if err := tx.Save(&merged).Error; err != nil {
+					return err
+				}
+			case errors.Is(err, gorm.ErrRecordNotFound):
+				if importedDevice.ID == "" {
+					importedDevice.ID = uuid.NewString()
+				} else {
+					var idOwner models.Device
+					if idErr := tx.First(&idOwner, "id = ?", importedDevice.ID).Error; idErr == nil {
+						importedDevice.ID = uuid.NewString()
+					} else if !errors.Is(idErr, gorm.ErrRecordNotFound) {
+						return idErr
+					}
+				}
+				if err := tx.Create(&importedDevice).Error; err != nil {
+					return err
+				}
+			default:
+				return err
+			}
+			imported++
+		}
+		return nil
+	})
+
+	return imported, err
+}
+
+func mergeImportedDevice(existing, imported models.Device) models.Device {
+	if imported.Hostname != "" {
+		existing.Hostname = imported.Hostname
+	}
+	if imported.Vendor != "" {
+		existing.Vendor = imported.Vendor
+	}
+	if imported.Model != "" {
+		existing.Model = imported.Model
+	}
+	if imported.OSVersion != "" {
+		existing.OSVersion = imported.OSVersion
+	}
+	if imported.Location != "" {
+		existing.Location = imported.Location
+	}
+	if imported.UptimeSeconds != 0 {
+		existing.UptimeSeconds = imported.UptimeSeconds
+	}
+	if imported.MACAddress != "" {
+		existing.MACAddress = imported.MACAddress
+	}
+	if imported.SerialNumber != "" {
+		existing.SerialNumber = imported.SerialNumber
+	}
+	if imported.Tags != "" {
+		existing.Tags = imported.Tags
+	}
+	if imported.SNMPVersion != "" {
+		existing.SNMPVersion = imported.SNMPVersion
+	}
+	if imported.SNMPPort != 0 {
+		existing.SNMPPort = imported.SNMPPort
+	}
+	if imported.SSHPort != 0 {
+		existing.SSHPort = imported.SSHPort
+	}
+	if imported.CredentialID != "" {
+		existing.CredentialID = imported.CredentialID
+	}
+	if imported.Description != "" {
+		existing.Description = imported.Description
+	}
+	if imported.LastSeenAt != nil {
+		existing.LastSeenAt = imported.LastSeenAt
+	}
+	if imported.LastConnectivityCheckAt != nil {
+		existing.LastConnectivityCheckAt = imported.LastConnectivityCheckAt
+	}
+	if imported.ConnectivityStatus != "" {
+		existing.ConnectivityStatus = imported.ConnectivityStatus
+	}
+	return existing
+}
+
+func mergeDiscoveredDevice(existing, discovered models.Device) models.Device {
+	if discovered.Hostname != "" {
+		existing.Hostname = discovered.Hostname
+	}
+	if discovered.Vendor != "" {
+		existing.Vendor = discovered.Vendor
+	}
+	if discovered.Model != "" {
+		existing.Model = discovered.Model
+	}
+	if discovered.OSVersion != "" {
+		existing.OSVersion = discovered.OSVersion
+	}
+	if discovered.Description != "" {
+		existing.Description = discovered.Description
+	}
+	if discovered.Location != "" {
+		existing.Location = discovered.Location
+	}
+	if discovered.Contact != "" {
+		existing.Contact = discovered.Contact
+	}
+	if discovered.MACAddress != "" {
+		existing.MACAddress = discovered.MACAddress
+	}
+	if discovered.UptimeSeconds != 0 {
+		existing.UptimeSeconds = discovered.UptimeSeconds
+	}
+	existing.LastSeenAt = discovered.LastSeenAt
+	return existing
+}
+
+func (a *App) recordConnectivityCheck(deviceID, status string) {
+	now := time.Now()
+	if err := db.DB.Model(&models.Device{}).Where("id = ?", deviceID).Updates(map[string]interface{}{
+		"last_connectivity_check_at": now,
+		"connectivity_status":        status,
+	}).Error; err != nil {
+		logger.Error("failed to record device connectivity", err)
+	}
 }
 
 // GetDevicesByIPs returns devices matching a list of IP addresses
@@ -308,9 +448,11 @@ func (a *App) TestDeviceConnection(deviceID string) map[string]interface{} {
 		Timeout:  10 * time.Second,
 	})
 	if err != nil {
+		a.recordConnectivityCheck(device.ID, "unreachable")
 		return map[string]interface{}{"success": false, "error": err.Error()}
 	}
 	sess.Close()
+	a.recordConnectivityCheck(device.ID, "reachable")
 	return map[string]interface{}{"success": true}
 }
 
@@ -645,23 +787,33 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 
 		var existing models.Device
 		dbErr := db.DB.Where("ip = ?", r.IP).First(&existing).Error
-		if dbErr == gorm.ErrRecordNotFound {
-			db.DB.Create(&device)
+		if errors.Is(dbErr, gorm.ErrRecordNotFound) {
+			if err := db.DB.Create(&device).Error; err != nil {
+				logger.Error("save discovered device", err)
+				continue
+			}
 			discovered = append(discovered, device)
 			discoveredIDs = append(discoveredIDs, device.ID)
+		} else if dbErr != nil {
+			logger.Error("load discovered device", dbErr)
+			continue
 		} else {
-			existing.Hostname = device.Hostname
-			existing.Description = device.Description
-			existing.Vendor = device.Vendor
-			existing.Model = device.Model
-			existing.Location = device.Location
-			existing.MACAddress = device.MACAddress
-			existing.OSVersion = device.OSVersion
-			existing.UptimeSeconds = device.UptimeSeconds
-			existing.LastSeenAt = &now
-			db.DB.Save(&existing)
-			discovered = append(discovered, existing)
-			discoveredIDs = append(discoveredIDs, existing.ID)
+			merged := mergeDiscoveredDevice(existing, device)
+			if err := db.DB.Save(&merged).Error; err != nil {
+				logger.Error("update discovered device", err)
+				continue
+			}
+			discovered = append(discovered, merged)
+			discoveredIDs = append(discoveredIDs, merged.ID)
+		}
+	}
+
+	responded, noResponse := 0, 0
+	for _, r := range results {
+		if r.Reachable {
+			responded++
+		} else {
+			noResponse++
 		}
 	}
 
@@ -678,8 +830,11 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 		fmt.Sprintf(`{"found":%d,"duration_ms":%d}`, len(discovered), time.Since(start).Milliseconds()),
 		"success", time.Since(start).Milliseconds())
 	runtime.EventsEmit(a.ctx, "scan:complete", map[string]interface{}{
-		"found":    len(discovered),
-		"duration": time.Since(start).Milliseconds(),
+		"found":       len(discovered),
+		"responded":   responded,
+		"no_response": noResponse,
+		"processed":   len(results),
+		"duration":    time.Since(start).Milliseconds(),
 	})
 
 	return discovered, nil
@@ -777,6 +932,7 @@ func (a *App) resultToDevice(r snmp.ScanResult, credID, snmpVersion string) mode
 	hostname := strings.TrimSpace(r.Data["sysName"])
 	description := strings.TrimSpace(r.Data["sysDescr"])
 	location := strings.TrimSpace(r.Data["sysLocation"])
+	contact := strings.TrimSpace(r.Data["sysContact"])
 	sysObjectID := strings.TrimSpace(r.Data["sysObjectID"])
 	mac := strings.TrimSpace(r.Data["sysMACAddress"])
 
@@ -820,6 +976,7 @@ func (a *App) resultToDevice(r snmp.ScanResult, credID, snmpVersion string) mode
 		Hostname:      hostname,
 		Description:   description,
 		Location:      location,
+		Contact:       contact,
 		Vendor:        vendor,
 		Model:         model,
 		MACAddress:    mac,
@@ -1130,8 +1287,8 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 		deviceID := ""
 		if br.Backup != nil {
 			deviceID = br.Backup.DeviceID
-			if br.Backup.Status == "failed" {
-				status = "failed"
+			status = br.Backup.Status
+			if status != "success" {
 				errMsg = br.Backup.ErrorMessage
 			}
 		}
@@ -1166,6 +1323,9 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 			results = append(results, *br.Backup)
 		}
 		status := "success"
+		if br.Backup != nil {
+			status = br.Backup.Status
+		}
 		if br.Error != nil {
 			status = "failed"
 		}
@@ -1183,6 +1343,7 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 	runtime.EventsEmit(a.ctx, "backup:complete", map[string]interface{}{
 		"total":    len(results),
 		"success":  countStatus(results, "success"),
+		"suspect":  countStatus(results, "suspect"),
 		"failed":   countStatus(results, "failed"),
 		"duration": time.Since(start).Milliseconds(),
 	})
@@ -1371,97 +1532,66 @@ func (a *App) CompareBackups(backupIDA, backupIDB string) (*diff.DiffResult, err
 // ─────────────────────────────────────────────
 
 func (a *App) RunAudit(deviceIDs []string) ([]audit.AuditReport, error) {
-	var reports []audit.AuditReport
-
-	for _, deviceID := range deviceIDs {
-		var device models.Device
-		if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
-			continue
-		}
-
-		// Get latest successful backup content
-		var latestBackup models.Backup
-		err := db.DB.Where("device_id = ? AND status = 'success'", deviceID).
-			Order("created_at DESC").First(&latestBackup).Error
-		if err != nil {
-			reports = append(reports, audit.AuditReport{
-				DeviceID:   deviceID,
-				DeviceIP:   device.IP,
-				TotalRules: 0,
-			})
-			logger.AuditAction(a.ctx, "audit", "device", deviceID,
-				fmt.Sprintf(`{"ip":"%s","error":"no_backup"}`, device.IP), "failed", 0)
-			continue
-		}
-
-		content, err := a.backupMgr.GetContent(latestBackup.ID)
-		if err != nil {
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
-		report, err := a.auditEngine.Run(ctx, audit.AuditRequest{
-			Device: device,
-			Config: content,
-		})
-		cancel()
-
-		if err == nil && report != nil {
-			reports = append(reports, *report)
-			logger.AuditAction(a.ctx, "audit", "device", deviceID,
-				fmt.Sprintf(`{"ip":"%s","score":%.0f,"passed":%d,"total":%d}`,
-					device.IP, report.Score, report.Passed, report.TotalRules),
-				"success", 0)
-		}
-	}
-
-	return reports, nil
+	return a.runAudits(deviceIDs, nil)
 }
 
 // RunAuditFiltered runs audit with specific device IDs and rule IDs (empty ruleIDs = all enabled rules)
 func (a *App) RunAuditFiltered(deviceIDs []string, ruleIDs []string) ([]audit.AuditReport, error) {
+	return a.runAudits(deviceIDs, ruleIDs)
+}
+
+func (a *App) runAudits(deviceIDs, ruleIDs []string) ([]audit.AuditReport, error) {
 	var reports []audit.AuditReport
 
 	for _, deviceID := range deviceIDs {
 		var device models.Device
 		if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
+			reports = append(reports, audit.AuditReport{DeviceID: deviceID, Status: "error", ErrorMessage: "Équipement introuvable dans l’inventaire."})
 			continue
 		}
-
-		var latestBackup models.Backup
-		err := db.DB.Where("device_id = ? AND status = 'success'", deviceID).
-			Order("created_at DESC").First(&latestBackup).Error
-		if err != nil {
-			reports = append(reports, audit.AuditReport{
-				DeviceID: deviceID,
-				DeviceIP: device.IP,
-			})
-			continue
+		report := a.auditDevice(device, ruleIDs)
+		reports = append(reports, report)
+		auditStatus := "success"
+		if report.Status == "error" {
+			auditStatus = "failed"
 		}
-
-		content, err := a.backupMgr.GetContent(latestBackup.ID)
-		if err != nil {
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
-		report, err := a.auditEngine.Run(ctx, audit.AuditRequest{
-			Device:  device,
-			Config:  content,
-			RuleIDs: ruleIDs,
-		})
-		cancel()
-
-		if err == nil && report != nil {
-			reports = append(reports, *report)
-			logger.AuditAction(a.ctx, "audit", "device", deviceID,
-				fmt.Sprintf(`{"ip":"%s","score":%.0f,"passed":%d,"total":%d,"rules":%d}`,
-					device.IP, report.Score, report.Passed, report.TotalRules, len(ruleIDs)),
-				"success", 0)
-		}
+		logger.AuditAction(a.ctx, "audit", "device", deviceID,
+			fmt.Sprintf(`{"ip":"%s","score":%.0f,"assessed":%d,"total":%d,"rules":%d}`,
+				device.IP, report.Score, report.Assessed, report.TotalRules, len(ruleIDs)), auditStatus, 0)
 	}
-
 	return reports, nil
+}
+
+func (a *App) auditDevice(device models.Device, ruleIDs []string) audit.AuditReport {
+	base := audit.AuditReport{DeviceID: device.ID, DeviceIP: device.IP, DeviceHost: device.Hostname, Status: "error"}
+	var latestBackup models.Backup
+	if err := db.DB.Where("device_id = ?", device.ID).Order("created_at DESC").First(&latestBackup).Error; err != nil {
+		base.ErrorMessage = "Aucune sauvegarde disponible. Créez une sauvegarde validée avant de relancer l’audit."
+		return base
+	}
+	base.BackupID = latestBackup.ID
+	base.BackupStatus = latestBackup.Status
+	base.BackupAt = &latestBackup.CreatedAt
+	if latestBackup.Status != "success" {
+		base.ErrorMessage = fmt.Sprintf("La dernière sauvegarde est au statut %q et ne peut pas servir de preuve d’audit.", latestBackup.Status)
+		return base
+	}
+	content, err := a.backupMgr.GetContent(latestBackup.ID)
+	if err != nil || strings.TrimSpace(content) == "" {
+		base.ErrorMessage = "La sauvegarde validée est inaccessible ou vide. Relancez une sauvegarde avant l’audit."
+		return base
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	report, err := a.auditEngine.Run(ctx, audit.AuditRequest{Device: device, Config: content, RuleIDs: ruleIDs})
+	if err != nil || report == nil {
+		base.ErrorMessage = "Impossible d’exécuter correctement les contrôles d’audit."
+		return base
+	}
+	report.BackupID = latestBackup.ID
+	report.BackupStatus = latestBackup.Status
+	report.BackupAt = &latestBackup.CreatedAt
+	return *report
 }
 
 func (a *App) GetAuditRules() ([]models.AuditRule, error) {
@@ -1659,176 +1789,6 @@ func (a *App) RunPlaybook(req PlaybookRunRequest) ([]playbook.ExecutionResult, e
 }
 
 // ─────────────────────────────────────────────
-// TOPOLOGY
-// ─────────────────────────────────────────────
-
-func (a *App) GetTopology() (*topology.Graph, error) {
-	return topology.Build()
-}
-
-// CollectLLDP queries all known devices via SNMP LLDP-MIB, discovers neighbor
-// relationships, classifies links as trunk or access, and persists the results
-// in the DeviceLink table. Existing entries for polled devices are replaced.
-func (a *App) CollectLLDP() error {
-	var devices []models.Device
-	if err := db.DB.Find(&devices).Error; err != nil {
-		return fmt.Errorf("load devices: %w", err)
-	}
-
-	// Build a lookup map: MAC → deviceID and hostname → deviceID for resolving remote endpoints
-	macToID := make(map[string]string, len(devices))
-	nameToID := make(map[string]string, len(devices))
-	for _, d := range devices {
-		if d.MACAddress != "" {
-			macToID[strings.ToLower(d.MACAddress)] = d.ID
-		}
-		if d.Hostname != "" {
-			nameToID[strings.ToLower(d.Hostname)] = d.ID
-		}
-	}
-
-	// Collect LLDP data from every device in parallel (up to 10 workers)
-	type deviceLinks struct {
-		deviceID string
-		links    []snmp.RawLLDPLink
-	}
-
-	jobs := make(chan models.Device, len(devices))
-	results := make(chan deviceLinks, len(devices))
-
-	workers := 10
-	if len(devices) < workers {
-		workers = len(devices)
-	}
-
-	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for dev := range jobs {
-				params, err := a.getSNMPParams(dev.CredentialID)
-				if err != nil {
-					results <- deviceLinks{deviceID: dev.ID, links: nil}
-					continue
-				}
-				if dev.CredentialID == "" && dev.SNMPVersion != "" {
-					params.Version = dev.SNMPVersion
-				}
-				links, err := snmp.CollectLLDPNeighbors(dev.IP, uint16(dev.SNMPPort), params.Community, params.Version, params)
-				if err != nil || len(links) == 0 {
-					results <- deviceLinks{deviceID: dev.ID, links: nil}
-					continue
-				}
-				results <- deviceLinks{deviceID: dev.ID, links: links}
-			}
-		}()
-	}
-	for _, d := range devices {
-		jobs <- d
-	}
-	close(jobs)
-	go func() { wg.Wait(); close(results) }()
-
-	// Gather all raw links
-	type rawEntry struct {
-		localDevID string
-		link       snmp.RawLLDPLink
-	}
-	var allRaw []rawEntry
-	for r := range results {
-		for _, l := range r.links {
-			allRaw = append(allRaw, rawEntry{localDevID: r.deviceID, link: l})
-		}
-	}
-
-	// Count parallel links between device pairs (for LAG detection)
-	type devPair struct{ a, b string }
-	pairCount := make(map[devPair]int)
-	for _, e := range allRaw {
-		remID := resolveRemoteDevice(e.link, macToID, nameToID)
-		if remID != "" {
-			p := devPair{a: e.localDevID, b: remID}
-			if p.a > p.b {
-				p.a, p.b = p.b, p.a
-			}
-			pairCount[p]++
-		}
-	}
-
-	// Build DeviceLink records to persist
-	var toSave []models.DeviceLink
-	for _, e := range allRaw {
-		remID := resolveRemoteDevice(e.link, macToID, nameToID)
-
-		p := devPair{a: e.localDevID, b: remID}
-		if p.a > p.b {
-			p.a, p.b = p.b, p.a
-		}
-		parallel := pairCount[p]
-
-		portName := e.link.LocalPortDesc
-		if portName == "" {
-			portName = e.link.LocalPortID
-		}
-		linkType := snmp.ClassifyLinkType(portName, remID != "", parallel)
-
-		toSave = append(toSave, models.DeviceLink{
-			ID:               uuid.New().String(),
-			LocalDeviceID:    e.localDevID,
-			LocalPort:        portName,
-			RemoteDeviceID:   remID,
-			RemoteChassisMAC: e.link.RemoteChassisMAC,
-			RemotePort:       firstNonEmpty(e.link.RemotePortDesc, e.link.RemotePortID),
-			RemoteSysName:    e.link.RemoteSysName,
-			LinkType:         linkType,
-			UpdatedAt:        time.Now(),
-		})
-	}
-
-	// Replace all DeviceLink entries in a single transaction
-	return db.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("1 = 1").Delete(&models.DeviceLink{}).Error; err != nil {
-			return err
-		}
-		if len(toSave) == 0 {
-			return nil
-		}
-		return tx.Create(&toSave).Error
-	})
-}
-
-// resolveRemoteDevice tries to match a raw LLDP link to a known device ID
-// by MAC address first, then by system name.
-func resolveRemoteDevice(link snmp.RawLLDPLink, macToID, nameToID map[string]string) string {
-	if link.RemoteChassisMAC != "" {
-		if id, ok := macToID[strings.ToLower(link.RemoteChassisMAC)]; ok {
-			return id
-		}
-	}
-	if link.RemoteSysName != "" {
-		if id, ok := nameToID[strings.ToLower(link.RemoteSysName)]; ok {
-			return id
-		}
-		// Try matching just the hostname part (before first dot)
-		short := strings.ToLower(strings.SplitN(link.RemoteSysName, ".", 2)[0])
-		for name, id := range nameToID {
-			if strings.ToLower(strings.SplitN(name, ".", 2)[0]) == short {
-				return id
-			}
-		}
-	}
-	return ""
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
-}
-
-// ─────────────────────────────────────────────
 // SCHEDULER
 // ─────────────────────────────────────────────
 
@@ -1935,11 +1895,12 @@ func (a *App) GetLogFileContent(filename string) (string, error) {
 
 // AppSettings holds user preferences
 type AppSettings struct {
-	Theme            string `json:"theme"`
-	Language         string `json:"language"`
-	BackupDir        string `json:"backup_dir"`
-	MaxWorkers       int    `json:"max_workers"`
-	LogRetentionDays int    `json:"log_retention_days"`
+	Theme              string `json:"theme"`
+	Language           string `json:"language"`
+	BackupDir          string `json:"backup_dir"`
+	MaxWorkers         int    `json:"max_workers"`
+	LogRetentionDays   int    `json:"log_retention_days"`
+	EphemeralInventory bool   `json:"ephemeral_inventory"`
 }
 
 func (a *App) GetSettings() (*AppSettings, error) {
@@ -2018,9 +1979,6 @@ func (a *App) runScheduledJob(ctx context.Context, jobType string, payload map[s
 		} else {
 			_, err = a.RunAudit(deviceIDs)
 		}
-	case "port_scan":
-		deviceIDs := extractStringSlice(payload, "device_ids")
-		err = a.RunPortTrackerScan(deviceIDs)
 	case "playbook":
 		playbookID := extractString(payload, "playbook_id", "")
 		deviceIDs := extractStringSlice(payload, "device_ids")
@@ -2091,43 +2049,3 @@ func extractStringSlice(m map[string]interface{}, key string) []string {
 // ─────────────────────────────────────────────
 // PORT TRACKER
 // ─────────────────────────────────────────────
-
-func (a *App) RunPortTrackerScan(deviceIDs []string) error {
-	a.mu.Lock()
-	if a.scanCancel != nil {
-		a.mu.Unlock()
-		return fmt.Errorf("a scan is already in progress")
-	}
-	var ctx context.Context
-	ctx, a.scanCancel = context.WithCancel(a.ctx)
-	a.mu.Unlock()
-
-	defer func() {
-		a.mu.Lock()
-		a.scanCancel = nil
-		a.mu.Unlock()
-	}()
-
-	runtime.EventsEmit(a.ctx, "porttracker:scan:started")
-	err := porttracker.RunScan(ctx, deviceIDs)
-	runtime.EventsEmit(a.ctx, "porttracker:scan:finished", map[string]interface{}{
-		"error": err != nil,
-	})
-	
-	return err
-}
-
-func (a *App) GetPortStates(deviceID string) ([]models.PortState, error) {
-	var states []models.PortState
-	query := db.DB.Model(&models.PortState{})
-	if deviceID != "" {
-		query = query.Where("device_id = ?", deviceID)
-	}
-	err := query.Order("if_index ASC").Find(&states).Error
-	return states, err
-}
-
-func (a *App) GetAllPortStates() ([]models.PortState, error) {
-	return a.GetPortStates("")
-}
-

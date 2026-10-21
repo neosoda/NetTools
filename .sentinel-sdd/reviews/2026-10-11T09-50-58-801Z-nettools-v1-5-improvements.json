@@ -1,0 +1,7 @@
+{
+  "specId": "nettools-v1-5-improvements",
+  "outcome": "proposed",
+  "summary": "Fonctionnalites Port Tracker (mapping device, filtre switch, export CSV), Sauvegardes (synthese metriques, export ZIP avec integrite SHA256) et SNMPv3 (assistant de test interactif USM) developpees, testees et compilees avec succes dans build/bin/NetTools.exe.",
+  "reviewedAt": "2026-10-11T09:50:58.801Z",
+  "actor": "agent"
+}

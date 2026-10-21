@@ -2,25 +2,40 @@ package ssh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 )
 
+// ErrCommandCompletionUncertain indicates that a shell stopped producing data
+// before a terminal prompt confirmed command completion.
+var ErrCommandCompletionUncertain = errors.New("SSH command completion is uncertain")
+
 // safeBuffer is a thread-safe buffer for concurrent SSH reads and goroutine reads
 type safeBuffer struct {
-	mu  sync.Mutex
-	buf strings.Builder
+	mu          sync.Mutex
+	buf         strings.Builder
+	chunks      int
+	first, last time.Time
 }
 
 func (b *safeBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if len(p) > 0 {
+		b.chunks++
+		b.last = time.Now()
+		if b.first.IsZero() {
+			b.first = b.last
+		}
+	}
 	return b.buf.Write(p)
 }
 
@@ -108,7 +123,7 @@ var vendorConfigs = map[string]VendorConfig{
 	},
 	"allied": {
 		// Allied Telesis AlliedWare Plus.
-		PaginationPattern: regexp.MustCompile(`(?i)--\s*[Mm]ore\s*--`),
+		PaginationPattern: regexp.MustCompile(`(?i)--[ \t]*more[ \t]*--(?:[ \t]*\([^\r\n]*\))?|<cr>|press[ \t]+any[ \t]+key(?:[ \t]+to[ \t]+continue)?[.:]?`),
 		PaginationSend:    "\r",
 		PromptPattern:     regexp.MustCompile(`[#>]\s*$`),
 		BannerPattern:     regexp.MustCompile(`(?i)press any key|Press ENTER`),
@@ -202,19 +217,26 @@ var ansiPattern = regexp.MustCompile(
 
 // Session represents an SSH session to a network device
 type Session struct {
-	client  *ssh.Client
-	vendor  string
-	timeout time.Duration
+	client     *ssh.Client
+	vendor     string
+	timeout    time.Duration
+	diagnostic func(Diagnostic)
 }
 
 // InteractiveShell manages a persistent PTY session
 type InteractiveShell struct {
-	sess    *ssh.Session
-	stdin   io.WriteCloser
-	stdout  *safeBuffer
-	vc      VendorConfig
-	vendor  string
-	timeout time.Duration
+	sess           *ssh.Session
+	stdin          io.WriteCloser
+	stdout         *safeBuffer
+	vc             VendorConfig
+	vendor         string
+	timeout        time.Duration
+	diagnostic     func(Diagnostic)
+	stderr         *safeBuffer
+	closeRequested *atomic.Bool
+	prompt         *regexp.Regexp
+	done           chan struct{}
+	waitErr        error
 }
 
 type ConnectParams struct {
@@ -225,9 +247,11 @@ type ConnectParams struct {
 	PrivateKey string
 	Vendor     string
 	Timeout    time.Duration
+	Diagnostic func(Diagnostic) // Optional metadata-only observer; enabled for backups.
 }
 
 func Connect(ctx context.Context, p ConnectParams) (*Session, error) {
+	start := time.Now()
 	if p.Timeout == 0 {
 		p.Timeout = 30 * time.Second
 	}
@@ -280,6 +304,7 @@ func Connect(ctx context.Context, p ConnectParams) (*Session, error) {
 
 	addr := fmt.Sprintf("%s:%d", p.Host, p.Port)
 
+	diagnose(p.Diagnostic, ctx, "connect", "started", start, p.Timeout, nil, nil, nil, false, false, 0)
 	// Dial with context support for cancellation
 	dialDone := make(chan struct{})
 	var client *ssh.Client
@@ -291,9 +316,11 @@ func Connect(ctx context.Context, p ConnectParams) (*Session, error) {
 
 	select {
 	case <-ctx.Done():
+		diagnose(p.Diagnostic, ctx, "connect", "context_done", start, p.Timeout, nil, nil, ctx.Err(), false, false, 0)
 		return nil, fmt.Errorf("ssh dial %s: %w", addr, ctx.Err())
 	case <-dialDone:
 		if dialErr != nil {
+			diagnose(p.Diagnostic, ctx, "connect", "failed", start, p.Timeout, nil, nil, dialErr, false, false, 0)
 			return nil, fmt.Errorf("ssh dial %s: %w", addr, dialErr)
 		}
 	}
@@ -306,7 +333,11 @@ func Connect(ctx context.Context, p ConnectParams) (*Session, error) {
 		}
 	}
 
-	return &Session{client: client, vendor: p.Vendor, timeout: p.Timeout}, nil
+	diagnose(p.Diagnostic, ctx, "connect", "authenticated", start, p.Timeout, nil, nil, nil, false, false, 0)
+	if p.Diagnostic != nil {
+		p.Diagnostic(Diagnostic{Stage: "profile", Reason: "after_authentication", Profile: profileName(p.Vendor)})
+	}
+	return &Session{client: client, vendor: p.Vendor, timeout: p.Timeout, diagnostic: p.Diagnostic}, nil
 }
 
 func (s *Session) Close() {
@@ -319,39 +350,73 @@ func (s *Session) Close() {
 // This is the preferred method for backup: the device sends the full output without
 // pagination because there is no terminal attached — equivalent to paramiko exec_command().
 func (s *Session) RunCommand(ctx context.Context, command string) (string, error) {
+	start := time.Now()
+	var combined, stdout, stderr safeBuffer
+	observe := s.diagnostic
+	if observe != nil {
+		observe = func(d Diagnostic) {
+			current := combined.String()
+			clean := CleanOutput(current)
+			vc := vendorConfigs[profileName(s.vendor)]
+			d.Profile = profileName(s.vendor)
+			d.Prompt = hasTerminalPrompt(vc.PromptPattern, current)
+			d.Pager = vc.PaginationPattern != nil && vc.PaginationPattern.MatchString(current)
+			d.CleanPrompt = hasTerminalPrompt(vc.PromptPattern, clean)
+			d.CleanPager = vc.PaginationPattern != nil && vc.PaginationPattern.MatchString(clean)
+			d.CLIErrorSeen = cliErrorPattern.MatchString(clean)
+			d.CLIErrorClass = cliErrorClass(clean)
+			d.PromptTerminator = promptTerminator(clean)
+			s.diagnostic(d)
+		}
+	}
+	var resultErr error
+	defer func() {
+		diagnose(observe, ctx, "exec", "finished", start, s.timeout, &stdout, &stderr, resultErr, false, false, 0)
+	}()
+	diagnose(observe, ctx, "exec_channel", "opening", start, s.timeout, nil, nil, nil, false, false, 0)
 	sess, err := s.client.NewSession()
 	if err != nil {
+		resultErr = err
 		return "", fmt.Errorf("new session: %w", err)
 	}
 	defer sess.Close()
-
-	// No PTY requested: exec channel without a terminal.
-	// Most network devices (Cisco, Allied, HP, HPE, Aruba) will send the full
-	// output without any "--More--" pagination when there is no terminal.
-
-	outputCh := make(chan struct {
-		data []byte
-		err  error
-	}, 1)
+	diagnose(observe, ctx, "exec_channel", "opened_no_pty", start, s.timeout, nil, nil, nil, false, false, 0)
+	sess.Stdout = diagnosticWriter{&combined, &stdout}
+	sess.Stderr = diagnosticWriter{&combined, &stderr}
+	// Bound both request acknowledgement and stream/exit-status waiting.
+	execCtx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	diagnose(observe, execCtx, "exec_request", "started", start, s.timeout, &stdout, &stderr, nil, false, false, 0)
+	outputCh := make(chan error, 1)
 	go func() {
-		output, err := sess.CombinedOutput(command)
-		outputCh <- struct {
-			data []byte
-			err  error
-		}{output, err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		sess.Close()
-		return "", ctx.Err()
-	case result := <-outputCh:
-		if result.err != nil {
-			// Always propagate the error so the caller can fallback to interactive mode.
-			// (Some devices like Aruba reject exec channel but include error text in data.)
-			return "", result.err
+		if err := sess.Start(command); err != nil {
+			outputCh <- err
+			return
 		}
-		return CleanOutput(string(result.data)), nil
+		diagnose(observe, execCtx, "exec_request", "accepted", start, s.timeout, &stdout, &stderr, nil, false, false, 0)
+		outputCh <- sess.Wait()
+	}()
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-execCtx.Done():
+			resultErr = execCtx.Err()
+			return "", fmt.Errorf("exec wait: %w", resultErr)
+		case resultErr = <-outputCh:
+			if resultErr != nil {
+				var missing *ssh.ExitMissingError
+				if !errors.As(resultErr, &missing) {
+					return "", resultErr
+				}
+				// RFC 4254 recommends, but does not require, an exit-status.
+				// Wait has already drained both streams and observed channel closure.
+				diagnose(observe, execCtx, "exec_completion", "closed_without_exit_status", start, s.timeout, &stdout, &stderr, resultErr, false, false, 0)
+			}
+			return CleanOutput(combined.String()), nil
+		case <-tick.C:
+			diagnose(observe, execCtx, "exec_read", "waiting", start, s.timeout, &stdout, &stderr, nil, false, false, 0)
+		}
 	}
 }
 
@@ -367,45 +432,90 @@ func (s *Session) RunCommandInteractive(ctx context.Context, command string) (st
 	return shell.Run(ctx, command)
 }
 
+// RunBackupInteractive enters Allied's privileged EXEC mode only when the
+// backup fallback starts at a user EXEC prompt. It never enters config mode.
+// Do not apply this preparation to arbitrary commands or playbooks.
+func (s *Session) RunBackupInteractive(ctx context.Context, command string) (string, error) {
+	shell, err := s.OpenInteractiveShell(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer shell.Close()
+	shell.prompt = learnedPrompt(CleanOutput(shell.stdout.String()))
+	if shell.vendor == "allied" && promptTerminator(CleanOutput(shell.stdout.String())) == ">" {
+		response, err := shell.runWithTimeout(ctx, "enable", min(5*time.Second, s.timeout), "backup_enable")
+		if err != nil {
+			return "", fmt.Errorf("Allied backup requires privileged prompt (#); enable did not complete (an enable password may be required): %w", err)
+		}
+		if promptTerminator(response) != "#" || !hasTerminalPrompt(shell.commandPrompt(), response) || cliErrorPattern.MatchString(response) {
+			return "", fmt.Errorf("Allied backup requires privileged prompt (#); enable was rejected")
+		}
+	}
+	return shell.Run(ctx, command)
+}
+
 // OpenInteractiveShell initializes a persistent interactive shell (handles banners & paging)
-func (s *Session) OpenInteractiveShell(ctx context.Context) (*InteractiveShell, error) {
+func (s *Session) OpenInteractiveShell(ctx context.Context) (result *InteractiveShell, resultErr error) {
+	start := time.Now()
+	phase := "shell_channel"
+	defer func() {
+		diagnose(s.diagnostic, ctx, "shell_open", "finished", start, s.timeout, nil, nil, resultErr, false, false, 0)
+	}()
+	diagnose(s.diagnostic, ctx, phase, "opening", start, s.timeout, nil, nil, nil, false, false, 0)
 	sess, err := s.client.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("new session: %w", err)
 	}
 
+	diagnose(s.diagnostic, ctx, phase, "opened", start, s.timeout, nil, nil, nil, false, false, 0)
+	phase = "pty_vt100_512x512_echo_off"
+	diagnose(s.diagnostic, ctx, phase, "started", start, s.timeout, nil, nil, nil, false, false, 0)
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          0,
 		ssh.TTY_OP_ISPEED: 115200,
 		ssh.TTY_OP_OSPEED: 115200,
 	}
 	if err := sess.RequestPty("vt100", 512, 512, modes); err != nil {
+		diagnose(s.diagnostic, ctx, phase, "failed", start, s.timeout, nil, nil, err, false, false, 0)
 		sess.Close()
 		return nil, fmt.Errorf("pty request: %w", err)
 	}
 
+	diagnose(s.diagnostic, ctx, phase, "accepted", start, s.timeout, nil, nil, nil, false, false, 0)
+	phase = "shell_request"
 	stdin, err := sess.StdinPipe()
 	if err != nil {
 		sess.Close()
 		return nil, fmt.Errorf("stdin pipe: %w", err)
 	}
 
-	var sb safeBuffer
+	var sb, stderr safeBuffer
 	sess.Stdout = &sb
-	sess.Stderr = &sb
+	sess.Stderr = diagnosticWriter{&sb, &stderr}
 
+	diagnose(s.diagnostic, ctx, phase, "started", start, s.timeout, &sb, &stderr, nil, false, false, 0)
 	if err := sess.Shell(); err != nil {
+		diagnose(s.diagnostic, ctx, phase, "failed", start, s.timeout, &sb, &stderr, err, false, false, 0)
 		sess.Close()
 		return nil, fmt.Errorf("shell: %w", err)
 	}
 
+	diagnose(s.diagnostic, ctx, phase, "accepted", start, s.timeout, &sb, &stderr, nil, false, false, 0)
+	closeRequested := &atomic.Bool{}
 	shell := &InteractiveShell{
-		sess:    sess,
-		stdin:   stdin,
-		stdout:  &sb,
-		vendor:  s.vendor,
-		timeout: s.timeout,
+		sess: sess, stdin: stdin, stdout: &sb, vendor: s.vendor,
+		timeout: s.timeout, diagnostic: s.diagnostic, stderr: &stderr,
+		closeRequested: closeRequested, done: make(chan struct{}),
 	}
+	go func() {
+		shell.waitErr = sess.Wait()
+		close(shell.done) // Publishes waitErr and completion of stream copies.
+		reason := "closed_before_local_request"
+		if closeRequested.Load() {
+			reason = "closed_after_local_request"
+		}
+		diagnose(s.diagnostic, ctx, "shell_wait", reason, start, s.timeout, &sb, &stderr, shell.waitErr, false, false, 0)
+	}()
 
 	shell.vc = vendorConfigs[shell.vendor]
 	if _, ok := vendorConfigs[shell.vendor]; !ok {
@@ -413,8 +523,11 @@ func (s *Session) OpenInteractiveShell(ctx context.Context) (*InteractiveShell, 
 	}
 
 	// Phase 1: Wait for initial prompt or banner, with banner auto-dismiss
+	phase = "shell_ready"
+	readyReason := "prompt"
 	waitReady := time.NewTicker(100 * time.Millisecond)
-	readyDeadline := time.After(15 * time.Second)
+	readyDeadline := time.NewTimer(min(15*time.Second, s.timeout))
+	defer readyDeadline.Stop()
 	bannerDismissed := false
 waitLoop:
 	for {
@@ -423,13 +536,23 @@ waitLoop:
 			waitReady.Stop()
 			shell.Close()
 			return nil, ctx.Err()
-		case <-readyDeadline:
+		case <-shell.done:
 			waitReady.Stop()
-			break waitLoop
+			shell.Close()
+			return nil, shellClosedError(shell.waitErr)
+		case <-readyDeadline.C:
+			waitReady.Stop()
+			shell.Close()
+			return nil, fmt.Errorf("initial shell prompt: %w", context.DeadlineExceeded)
 		case <-waitReady.C:
-			current := sb.String()
+			current := CleanOutput(sb.String())
 			if !bannerDismissed && shell.vc.BannerPattern != nil && shell.vc.BannerPattern.MatchString(current) {
-				fmt.Fprint(stdin, shell.vc.BannerSend)
+				if _, err := fmt.Fprint(stdin, shell.vc.BannerSend); err != nil {
+					waitReady.Stop()
+					shell.Close()
+					return nil, fmt.Errorf("banner write: %w", err)
+				}
+				diagnose(s.diagnostic, ctx, "banner", "dismissed", start, s.timeout, &sb, &stderr, nil, false, false, 0)
 				bannerDismissed = true
 				continue
 			}
@@ -440,6 +563,10 @@ waitLoop:
 		}
 	}
 
+	diagnose(s.diagnostic, ctx, phase, readyReason, start, 15*time.Second, &sb, &stderr, nil, hasTerminalPrompt(shell.vc.PromptPattern, sb.String()), false, 0)
+	if s.diagnostic != nil {
+		s.diagnostic(Diagnostic{Stage: "shell_ready_response", Reason: "observed", PromptTerminator: promptTerminator(CleanOutput(sb.String())), CleanPrompt: hasTerminalPrompt(shell.vc.PromptPattern, CleanOutput(sb.String()))})
+	}
 	// Phase 1.5: if vendor was unknown, try to detect from the initial banner/MOTD output
 	if shell.vendor == "unknown" {
 		if detected := DetectVendorFromBanner(sb.String()); detected != "" {
@@ -451,35 +578,19 @@ waitLoop:
 		}
 	}
 
-	// Phase 2: Send disable-paging command if supported
+	if s.diagnostic != nil {
+		s.diagnostic(Diagnostic{Stage: "profile", Reason: "after_shell_banner", Profile: profileName(shell.vendor)})
+	}
+	// Consume the preparation command's own response and final prompt before
+	// establishing the main command's buffer boundary.
 	if shell.vc.DisablePaging != "" {
-		fmt.Fprintf(stdin, "%s\r", shell.vc.DisablePaging)
-		pagingWait := time.NewTicker(100 * time.Millisecond)
-		pagingDeadline := time.After(5 * time.Second)
-		prevLen := sb.Len()
-		stableCount := 0
-	pagingLoop:
-		for {
-			select {
-			case <-ctx.Done():
-				pagingWait.Stop()
-				shell.Close()
-				return nil, ctx.Err()
-			case <-pagingDeadline:
-				pagingWait.Stop()
-				break pagingLoop
-			case <-pagingWait.C:
-				if sb.Len() == prevLen {
-					stableCount++
-					if stableCount >= 5 && hasTerminalPrompt(shell.vc.PromptPattern, sb.String()) {
-						pagingWait.Stop()
-						break pagingLoop
-					}
-				} else {
-					stableCount = 0
-					prevLen = sb.Len()
-				}
-			}
+		response, err := shell.runWithTimeout(ctx, shell.vc.DisablePaging, min(5*time.Second, s.timeout), "disable_paging")
+		if err != nil {
+			shell.Close()
+			return nil, fmt.Errorf("disable paging: %w", err)
+		}
+		if s.diagnostic != nil {
+			s.diagnostic(Diagnostic{Stage: "disable_paging_response", Reason: "observed", NewBytes: len(response), CLIErrorSeen: cliErrorPattern.MatchString(response), CleanPrompt: hasTerminalPrompt(shell.prompt, response)})
 		}
 	}
 
@@ -516,75 +627,116 @@ func (sh *InteractiveShell) Run(ctx context.Context, command string) (string, er
 	return output, nil
 }
 
+var cliErrorPattern = regexp.MustCompile(`(?im)^\s*%\s*(invalid|error|incomplete|ambiguous)|command (execution is not supported|not supported)|permission denied`)
+
 // runOnce executes a command once and returns the raw output
 func (sh *InteractiveShell) runOnce(ctx context.Context, command string) (string, error) {
-	// Start reading from the current buffer point
+	return sh.runWithTimeout(ctx, command, sh.timeout, "interactive_read")
+}
+
+func (sh *InteractiveShell) runWithTimeout(ctx context.Context, command string, timeout time.Duration, stage string) (output string, err error) {
+	start := time.Now()
 	startLen := sh.stdout.Len()
-
-	// Phase 3: Send the actual command
-	fmt.Fprintf(sh.stdin, "%s\r", command)
-
-	// Phase 4: Read output with pagination handling
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		deadline := time.After(sh.timeout)
-		tick := time.NewTicker(100 * time.Millisecond)
-		defer tick.Stop()
-		lastLen := -1
-		stableCount := 0
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-deadline:
-				return
-			case <-tick.C:
-				currentLen := sh.stdout.Len()
-				tailStart := currentLen - 200
-				if tailStart < 0 {
-					tailStart = 0
-				}
-				tail := sh.stdout.String()[tailStart:]
-
-				if sh.vc.PaginationPattern != nil && sh.vc.PaginationPattern.MatchString(tail) {
-					fmt.Fprint(sh.stdin, sh.vc.PaginationSend)
-					stableCount = 0
-					lastLen = currentLen
-					continue
-				}
-
-				if currentLen == lastLen {
-					stableCount++
-					if stableCount >= 10 && hasTerminalPrompt(sh.vc.PromptPattern, tail) {
-						return
-					}
-					if stableCount >= 30 && configOutputLooksComplete(command, tail) {
-						return
-					}
-					if stableCount >= 50 {
-						return
-					}
-				} else {
-					stableCount = 0
-					lastLen = currentLen
-				}
-			}
+	observe := sh.diagnostic
+	if observe != nil {
+		observe = func(d Diagnostic) {
+			current := sh.stdout.String()
+			fresh := current[startLen:]
+			clean := CleanOutput(fresh)
+			d.Profile = profileName(sh.vendor)
+			d.NewBytes = len(fresh)
+			d.EchoSeen = strings.Contains(fresh, command)
+			d.CleanPrompt = hasTerminalPrompt(sh.commandPrompt(), clean)
+			d.CleanPager = sh.vc.PaginationPattern != nil && sh.vc.PaginationPattern.MatchString(clean)
+			d.CLIErrorSeen = cliErrorPattern.MatchString(clean)
+			d.CLIErrorClass = cliErrorClass(clean)
+			d.PromptTerminator = promptTerminator(clean)
+			sh.diagnostic(d)
+		}
+	}
+	reason := "write_error"
+	var consumedPages [][2]int
+	pagerSends := 0
+	prompt, pager := false, false
+	defer func() {
+		diagnose(observe, ctx, stage, reason, start, timeout, sh.stdout, sh.stderr, err, prompt, pager, pagerSends)
+		full := sh.stdout.String()
+		output = withoutPages(CleanOutput(full[startLen:]), consumedPages)
+		if err != nil {
+			sh.Close()
 		}
 	}()
-	<-done
-
-	fullOutput := sh.stdout.String()
-	newOutput := ""
-	if startLen < len(fullOutput) {
-		newOutput = fullOutput[startLen:]
+	if _, err = fmt.Fprintf(sh.stdin, "%s\r", command); err != nil {
+		return "", fmt.Errorf("command write: %w", err)
 	}
+	diagnose(observe, ctx, "interactive_command", "written", start, sh.timeout, sh.stdout, sh.stderr, nil, false, false, 0)
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+	lastLen, stableCount := -1, 0
+	consumedStart := -1
+	nextDiagnostic := start.Add(time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			reason = "context_done"
+			return "", ctx.Err()
+		case <-sh.done:
+			reason = "channel_closed"
+			var missing *ssh.ExitMissingError
+			clean := CleanOutput(sh.stdout.String()[startLen:])
+			if hasTerminalPrompt(sh.commandPrompt(), clean) && (sh.waitErr == nil || errors.As(sh.waitErr, &missing)) {
+				reason, prompt = "prompt_before_channel_close", true
+				return "", nil
+			}
+			return "", shellClosedError(sh.waitErr)
+		case <-deadline.C:
+			reason = "command_deadline"
+			return "", fmt.Errorf("interactive command wait: %w", context.DeadlineExceeded)
+		case <-tick.C:
+			// Only the response to this command can complete this command.
+			current := sh.stdout.String()[startLen:]
+			currentLen := len(current)
+			clean := CleanOutput(current)
+			prompt = hasTerminalPrompt(sh.commandPrompt(), clean)
+			page := paginationAtEnd(sh.vc.PaginationPattern, clean)
+			pager = page != nil
+			if pager {
+				if page[0] > consumedStart {
+					if _, err = fmt.Fprint(sh.stdin, sh.vc.PaginationSend); err != nil {
+						reason = "pager_write_error"
+						return "", fmt.Errorf("pager write: %w", err)
+					}
+					pagerSends++
+					consumedStart = page[0]
+					consumedPages = append(consumedPages, [2]int{page[0], page[1]})
+				} else if page[0] == consumedStart {
+					consumedPages[len(consumedPages)-1][1] = page[1]
+				}
+				stableCount, lastLen = 0, currentLen
+			} else if currentLen == lastLen {
+				stableCount++
+				if currentLen > 0 && stableCount >= 10 && prompt {
+					reason = "stable_prompt"
+					return "", nil
+				}
+			} else {
+				stableCount, lastLen = 0, currentLen
+			}
 
-	return CleanOutput(newOutput), nil
+			if !time.Now().Before(nextDiagnostic) {
+				nextDiagnostic = time.Now().Add(time.Second)
+				diagnose(observe, ctx, stage, "waiting", start, timeout, sh.stdout, sh.stderr, nil, prompt, pager, pagerSends)
+			}
+		}
+	}
 }
 
 func (sh *InteractiveShell) Close() {
+	if sh.closeRequested != nil {
+		sh.closeRequested.Store(true)
+	}
 	if sh.stdin != nil {
 		sh.stdin.Close()
 	}
@@ -596,6 +748,8 @@ func (sh *InteractiveShell) Close() {
 // CleanOutput removes ANSI codes, control characters, and normalizes line endings
 func CleanOutput(raw string) string {
 	// Remove all ANSI/terminal control sequences
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	raw = strings.ReplaceAll(raw, "\r", "\n")
 	cleaned := ansiPattern.ReplaceAllString(raw, "")
 
 	// Normalize line endings
@@ -642,20 +796,72 @@ func hasTerminalPrompt(re *regexp.Regexp, text string) bool {
 	return re.MatchString(last)
 }
 
-func configOutputLooksComplete(command, tail string) bool {
-	last := strings.TrimSpace(tail)
-	if last == "" {
-		return false
+// learnedPrompt binds completion to the device prompt seen at shell startup,
+// allowing privilege/configuration-mode transitions on the same device.
+func learnedPrompt(text string) *regexp.Regexp {
+	line := lastTerminalLine(text)
+	if strings.HasSuffix(line, "#") || strings.HasSuffix(line, ">") {
+		base := strings.TrimSpace(line[:len(line)-1])
+		if i := strings.Index(base, "("); i >= 0 {
+			base = strings.TrimSpace(base[:i])
+		}
+		return regexp.MustCompile(`^` + regexp.QuoteMeta(base) + `(?:\([^\r\n]*\))*\s*[#>]\s*$`)
 	}
-	lower := strings.ToLower(last)
-	if strings.Contains(lower, strings.ToLower(command)) {
-		return false
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(line) + `$`)
+}
+
+func (sh *InteractiveShell) commandPrompt() *regexp.Regexp {
+	if sh.prompt != nil {
+		return sh.prompt
 	}
-	markers := []string{"\nend", "\nreturn", "\nexit", "\n#", "\n>"}
-	for _, marker := range markers {
-		if strings.Contains(lower, marker) {
-			return true
+	return sh.vc.PromptPattern
+}
+
+func lastTerminalLine(text string) string {
+	text = strings.TrimSpace(text)
+	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
+		text = text[i+1:]
+	}
+	return strings.TrimSpace(text)
+}
+
+// A pager must occupy the terminal's last line. Tokens in config/help lines
+// (for example "description <cr>") must never trigger a keypress.
+func paginationAtEnd(pattern *regexp.Regexp, text string) []int {
+	if pattern == nil {
+		return nil
+	}
+	lineStart := strings.LastIndexByte(text, '\n') + 1
+	line := text[lineStart:]
+	match := pattern.FindStringIndex(line)
+	if match == nil || strings.TrimSpace(line[:match[0]]) != "" || strings.TrimSpace(line[match[1]:]) != "" {
+		return nil
+	}
+	return []int{lineStart + match[0], lineStart + match[1]}
+}
+
+func withoutPages(text string, pages [][2]int) string {
+	for i := len(pages) - 1; i >= 0; i-- {
+		p := pages[i]
+		if p[1] <= len(text) {
+			text = text[:p[0]] + text[p[1]:]
 		}
 	}
-	return false
+	return text
+}
+
+// Preserve the error type for diagnostics without returning a server-supplied
+// error message that could contain terminal text.
+type shellReadError struct{ cause error }
+
+func (e *shellReadError) Error() string {
+	class, _ := errorClass(e.cause)
+	return "SSH shell closed before final prompt (" + class + ")"
+}
+func (e *shellReadError) Unwrap() error { return e.cause }
+func shellClosedError(err error) error {
+	if err == nil {
+		err = io.ErrUnexpectedEOF
+	}
+	return &shellReadError{err}
 }

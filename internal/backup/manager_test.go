@@ -28,3 +28,39 @@ func TestDeepCleanConfigRemovesPaginationArtifacts(t *testing.T) {
 		t.Fatalf("unexpected cleaned config: %q", got)
 	}
 }
+
+func TestValidateCapture(t *testing.T) {
+	tests := []struct {
+		name       string
+		raw        string
+		content    string
+		wantStatus string
+	}{
+		{
+			name:       "validated configuration",
+			raw:        "hostname SW-01\ninterface vlan 1\nend\n",
+			content:    "hostname SW-01\ninterface vlan 1\nend",
+			wantStatus: "success",
+		},
+		{
+			name:       "command error mixed with output",
+			raw:        "show running-config\n% Invalid input detected at '^' marker.\nhostname SW-01\n",
+			content:    "hostname SW-01\n",
+			wantStatus: "suspect",
+		},
+		{
+			name:       "empty command error",
+			raw:        "% Invalid input detected at '^' marker.\n",
+			content:    "",
+			wantStatus: "failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := validateCapture(tt.raw, tt.content).status; got != tt.wantStatus {
+				t.Fatalf("status = %q, want %q", got, tt.wantStatus)
+			}
+		})
+	}
+}

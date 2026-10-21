@@ -28,16 +28,40 @@ type AuditRequest struct {
 }
 
 type AuditReport struct {
-	DeviceID      string              `json:"device_id"`
-	DeviceIP      string              `json:"device_ip"`
-	DeviceHost    string              `json:"device_hostname"`
-	TotalRules    int                 `json:"total_rules"`
-	Passed        int                 `json:"passed"`
-	Failed        int                 `json:"failed"`
-	Score         float64             `json:"score"`
+	DeviceID      string               `json:"device_id"`
+	DeviceIP      string               `json:"device_ip"`
+	DeviceHost    string               `json:"device_hostname"`
+	Status        string               `json:"status"` // completed|error
+	ErrorMessage  string               `json:"error_message"`
+	BackupID      string               `json:"backup_id"`
+	BackupStatus  string               `json:"backup_status"`
+	BackupAt      *time.Time           `json:"backup_at"`
+	TotalRules    int                  `json:"total_rules"`
+	Passed        int                  `json:"passed"` // backward-compatible alias for Compliant
+	Failed        int                  `json:"failed"` // backward-compatible alias for NonCompliant
+	Compliant     int                  `json:"compliant"`
+	NonCompliant  int                  `json:"non_compliant"`
+	NotApplicable int                  `json:"not_applicable"`
+	Indeterminate int                  `json:"indeterminate"`
+	Errors        int                  `json:"errors"`
+	Assessed      int                  `json:"assessed"`
+	Score         float64              `json:"score"`
 	Results       []models.AuditResult `json:"results"`
-	Remediation   string              `json:"remediation"`
-	CreatedAt     time.Time           `json:"created_at"`
+	CreatedAt     time.Time            `json:"created_at"`
+}
+
+const (
+	StatusCompliant     = "compliant"
+	StatusNonCompliant  = "non_compliant"
+	StatusNotApplicable = "not_applicable"
+	StatusIndeterminate = "indeterminate"
+	StatusError         = "error"
+)
+
+type ruleEvaluation struct {
+	Status   string
+	Details  string
+	Evidence string
 }
 
 // Run executes audit rules against a device config
@@ -46,8 +70,6 @@ func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error
 	query := db.DB.Where("enabled = ?", true)
 	if len(req.RuleIDs) > 0 {
 		query = query.Where("id IN ?", req.RuleIDs)
-	} else if req.Device.Vendor != "" {
-		query = query.Where("vendor = '' OR vendor = ?", req.Device.Vendor)
 	}
 	if err := query.Find(&rules).Error; err != nil {
 		return nil, err
@@ -57,11 +79,10 @@ func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error
 		DeviceID:   req.Device.ID,
 		DeviceIP:   req.Device.IP,
 		DeviceHost: req.Device.Hostname,
+		Status:     "completed",
 		TotalRules: len(rules),
 		CreatedAt:  time.Now(),
 	}
-
-	var remediationLines []string
 
 	for _, rule := range rules {
 		select {
@@ -70,7 +91,14 @@ func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error
 		default:
 		}
 
-		passed, details := evaluateRule(rule, req.Config)
+		evaluation := evaluateRule(rule, req.Config)
+		if !ruleApplies(rule, req.Device) {
+			evaluation = ruleEvaluation{
+				Status:  StatusNotApplicable,
+				Details: fmt.Sprintf("Règle réservée au constructeur %s ; équipement identifié comme %s.", rule.Vendor, deviceVendor(req.Device)),
+			}
+		}
+		passed := evaluation.Status == StatusCompliant
 
 		result := models.AuditResult{
 			ID:          uuid.NewString(),
@@ -78,18 +106,18 @@ func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error
 			RuleID:      rule.ID,
 			RuleName:    rule.Name,
 			Passed:      passed,
-			Details:     details,
+			Status:      evaluation.Status,
+			Category:    rule.Category,
+			Expected:    rule.Description,
+			Risk:        rule.Risk,
+			Details:     evaluation.Details,
+			Evidence:    evaluation.Evidence,
 			Severity:    rule.Severity,
 			Remediation: "",
 		}
 
-		// Generate remediation script for failed rules
-		if !passed && rule.Remediation != "" {
-			remediation := expandRemediation(rule.Remediation, req.Device)
-			result.Remediation = remediation
-			remediationLines = append(remediationLines, fmt.Sprintf("! --- %s (severity: %s) ---", rule.Name, rule.Severity))
-			remediationLines = append(remediationLines, remediation)
-			remediationLines = append(remediationLines, "!")
+		if (evaluation.Status == StatusNonCompliant || evaluation.Status == StatusIndeterminate) && rule.Remediation != "" {
+			result.Remediation = redactSensitive(rule.Remediation)
 		}
 
 		if err := db.DB.Create(&result).Error; err != nil {
@@ -97,151 +125,123 @@ func (e *Engine) Run(ctx context.Context, req AuditRequest) (*AuditReport, error
 		}
 		report.Results = append(report.Results, result)
 
-		if passed {
-			report.Passed++
-		} else {
-			report.Failed++
+		switch evaluation.Status {
+		case StatusCompliant:
+			report.Compliant++
+		case StatusNonCompliant:
+			report.NonCompliant++
+		case StatusNotApplicable:
+			report.NotApplicable++
+		case StatusIndeterminate:
+			report.Indeterminate++
+		default:
+			report.Errors++
 		}
 	}
 
-	if report.TotalRules > 0 {
-		report.Score = float64(report.Passed) / float64(report.TotalRules) * 100
-	}
-
-	// Build full remediation script
-	if len(remediationLines) > 0 {
-		header := []string{
-			fmt.Sprintf("! Remediation script for %s (%s)", req.Device.Hostname, req.Device.IP),
-			fmt.Sprintf("! Generated: %s", time.Now().Format("2006-01-02 15:04:05")),
-			fmt.Sprintf("! Score: %.0f%% (%d/%d rules passed)", report.Score, report.Passed, report.TotalRules),
-			"!",
-			"configure terminal",
-		}
-		footer := []string{
-			"end",
-			"write memory",
-			"!",
-			"! --- End of remediation script ---",
-		}
-		allLines := append(header, remediationLines...)
-		allLines = append(allLines, footer...)
-		report.Remediation = strings.Join(allLines, "\n")
+	report.Passed = report.Compliant
+	report.Failed = report.NonCompliant
+	report.Assessed = report.Compliant + report.NonCompliant
+	if report.Assessed > 0 {
+		report.Score = float64(report.Compliant) / float64(report.Assessed) * 100
 	}
 
 	return report, nil
 }
 
-// evaluateRule checks a single rule against config text
-// Supports multi-line patterns with (?s) flag for block matching
-func evaluateRule(rule models.AuditRule, config string) (passed bool, details string) {
-	// Build regex with case-insensitive and multiline flags
-	pattern := rule.Pattern
-
-	// Check if pattern uses the special multi-line block syntax: pattern1 AND pattern2
-	// This allows checking for multiple patterns that must all be present
-	if strings.Contains(pattern, " AND ") {
+func evaluateRule(rule models.AuditRule, config string) ruleEvaluation {
+	if strings.TrimSpace(config) == "" {
+		return ruleEvaluation{Status: StatusError, Details: "Configuration vide : contrôle impossible."}
+	}
+	if strings.Contains(rule.Pattern, " AND ") {
 		return evaluateMultiPattern(rule, config)
 	}
-
-	// Add case-insensitive and multiline (dotall) flags if not already present
-	flags := "(?im)"
-	if strings.HasPrefix(pattern, "(?") {
-		flags = ""
-	}
-
-	re, err := regexp.Compile(flags + pattern)
+	re, err := compilePattern(rule.Pattern)
 	if err != nil {
-		return false, fmt.Sprintf("Invalid regex pattern: %s — %v", pattern, err)
+		return ruleEvaluation{Status: StatusError, Details: fmt.Sprintf("Expression régulière invalide : %v", err)}
 	}
-
-	matches := re.MatchString(config)
-	passed = (rule.MustMatch && matches) || (!rule.MustMatch && !matches)
-
-	if !passed {
-		if rule.MustMatch {
-			details = diagnoseFailure(rule.Pattern, config)
-		} else {
-			// Show the matching line for forbidden patterns
-			loc := re.FindString(config)
-			if loc != "" {
-				details = fmt.Sprintf("Forbidden pattern found: %s (matched: '%s')", rule.Pattern, truncate(loc, 80))
-			} else {
-				details = fmt.Sprintf("Forbidden pattern found: %s", rule.Pattern)
-			}
+	match := re.FindString(config)
+	if rule.MustMatch {
+		if match == "" {
+			return ruleEvaluation{Status: StatusIndeterminate, Details: "La configuration ne fournit pas de preuve suffisante pour confirmer cette exigence.", Evidence: diagnoseFailure(rule.Pattern, config)}
 		}
-	} else {
-		if rule.MustMatch {
-			loc := re.FindString(config)
-			details = fmt.Sprintf("Found: %s", truncate(loc, 80))
-		} else {
-			details = "Pattern correctly absent"
-		}
+		return ruleEvaluation{Status: StatusCompliant, Details: "Exigence vérifiée dans la configuration.", Evidence: redactEvidence(match)}
 	}
-
-	return passed, details
+	if match != "" {
+		return ruleEvaluation{Status: StatusNonCompliant, Details: "Une configuration interdite a été détectée.", Evidence: redactEvidence(match)}
+	}
+	return ruleEvaluation{Status: StatusCompliant, Details: "Aucune configuration interdite n’a été détectée."}
 }
 
 // evaluateMultiPattern handles rules with "pattern1 AND pattern2" syntax
 // This allows verifying multi-line blocks (e.g., NTP server AND its authentication)
-func evaluateMultiPattern(rule models.AuditRule, config string) (passed bool, details string) {
-	parts := strings.Split(rule.Pattern, " AND ")
-	allFound := true
-	var missing []string
-	var found []string
-
-	for _, part := range parts {
+func evaluateMultiPattern(rule models.AuditRule, config string) ruleEvaluation {
+	var missing, found []string
+	for _, part := range strings.Split(rule.Pattern, " AND ") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-
-		flags := "(?im)"
-		if strings.HasPrefix(part, "(?") {
-			flags = ""
-		}
-
-		re, err := regexp.Compile(flags + part)
+		re, err := compilePattern(part)
 		if err != nil {
-			return false, fmt.Sprintf("Invalid regex in multi-pattern: %s — %v", part, err)
+			return ruleEvaluation{Status: StatusError, Details: fmt.Sprintf("Expression régulière invalide : %v", err)}
 		}
-
-		if re.MatchString(config) {
-			loc := re.FindString(config)
-			found = append(found, truncate(loc, 60))
+		if match := re.FindString(config); match != "" {
+			found = append(found, redactEvidence(match))
 		} else {
-			allFound = false
 			missing = append(missing, part)
 		}
 	}
-
 	if rule.MustMatch {
-		passed = allFound
-		if !passed {
-			details = fmt.Sprintf("Missing patterns: %s", strings.Join(missing, ", "))
-		} else {
-			details = fmt.Sprintf("All %d patterns found", len(parts))
+		if len(missing) > 0 {
+			return ruleEvaluation{Status: StatusIndeterminate, Details: "La configuration ne permet pas de confirmer tous les éléments requis.", Evidence: fmt.Sprintf("Éléments confirmés : %s. Éléments non prouvés : %s.", strings.Join(found, " ; "), strings.Join(missing, ", "))}
 		}
-	} else {
-		// MustNotMatch: none should be present
-		passed = len(found) == 0
-		if !passed {
-			details = fmt.Sprintf("Forbidden patterns found: %s", strings.Join(found, ", "))
-		} else {
-			details = "All forbidden patterns correctly absent"
-		}
+		return ruleEvaluation{Status: StatusCompliant, Details: "Tous les éléments requis ont été vérifiés.", Evidence: strings.Join(found, " ; ")}
 	}
-
-	return passed, details
+	if len(found) > 0 {
+		return ruleEvaluation{Status: StatusNonCompliant, Details: "Une ou plusieurs configurations interdites ont été détectées.", Evidence: strings.Join(found, " ; ")}
+	}
+	return ruleEvaluation{Status: StatusCompliant, Details: "Aucune configuration interdite n’a été détectée."}
 }
 
-// expandRemediation replaces placeholders in remediation templates
-func expandRemediation(template string, device models.Device) string {
-	r := strings.NewReplacer(
-		"{{hostname}}", device.Hostname,
-		"{{ip}}", device.IP,
-		"{{vendor}}", device.Vendor,
-	)
-	return r.Replace(template)
+func compilePattern(pattern string) (*regexp.Regexp, error) {
+	flags := "(?im)"
+	if strings.HasPrefix(pattern, "(?") {
+		flags = ""
+	}
+	return regexp.Compile(flags + pattern)
+}
+
+func ruleApplies(rule models.AuditRule, device models.Device) bool {
+	return rule.Vendor == "" || strings.EqualFold(strings.TrimSpace(rule.Vendor), deviceVendor(device))
+}
+
+func deviceVendor(device models.Device) string {
+	vendor := strings.TrimSpace(device.Vendor)
+	if vendor == "" {
+		return "inconnu"
+	}
+	return vendor
+}
+
+var sensitiveLine = regexp.MustCompile(`(?i)\b(password|secret|community|private-key|authentication-key|privacy-password|psk)\b`)
+
+func redactEvidence(value string) string {
+	value = truncate(value, 240)
+	if sensitiveLine.MatchString(value) {
+		return "[élément de configuration sensible masqué]"
+	}
+	return value
+}
+
+func redactSensitive(value string) string {
+	lines := strings.Split(value, "\n")
+	for i, line := range lines {
+		if sensitiveLine.MatchString(line) {
+			lines[i] = "[recommandation contenant une donnée sensible masquée]"
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // diagnoseFailure provides a detailed explanation when a MustMatch rule fails.

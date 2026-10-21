@@ -4,12 +4,23 @@ export namespace audit {
 	    device_id: string;
 	    device_ip: string;
 	    device_hostname: string;
+	    status: string;
+	    error_message: string;
+	    backup_id: string;
+	    backup_status: string;
+	    // Go type: time
+	    backup_at?: any;
 	    total_rules: number;
 	    passed: number;
 	    failed: number;
+	    compliant: number;
+	    non_compliant: number;
+	    not_applicable: number;
+	    indeterminate: number;
+	    errors: number;
+	    assessed: number;
 	    score: number;
 	    results: models.AuditResult[];
-	    remediation: string;
 	    // Go type: time
 	    created_at: any;
 	
@@ -22,12 +33,22 @@ export namespace audit {
 	        this.device_id = source["device_id"];
 	        this.device_ip = source["device_ip"];
 	        this.device_hostname = source["device_hostname"];
+	        this.status = source["status"];
+	        this.error_message = source["error_message"];
+	        this.backup_id = source["backup_id"];
+	        this.backup_status = source["backup_status"];
+	        this.backup_at = this.convertValues(source["backup_at"], null);
 	        this.total_rules = source["total_rules"];
 	        this.passed = source["passed"];
 	        this.failed = source["failed"];
+	        this.compliant = source["compliant"];
+	        this.non_compliant = source["non_compliant"];
+	        this.not_applicable = source["not_applicable"];
+	        this.indeterminate = source["indeterminate"];
+	        this.errors = source["errors"];
+	        this.assessed = source["assessed"];
 	        this.score = source["score"];
 	        this.results = this.convertValues(source["results"], models.AuditResult);
-	        this.remediation = source["remediation"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
 	
@@ -121,6 +142,7 @@ export namespace main {
 	    backup_dir: string;
 	    max_workers: number;
 	    log_retention_days: number;
+	    ephemeral_inventory: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -133,6 +155,7 @@ export namespace main {
 	        this.backup_dir = source["backup_dir"];
 	        this.max_workers = source["max_workers"];
 	        this.log_retention_days = source["log_retention_days"];
+	        this.ephemeral_inventory = source["ephemeral_inventory"];
 	    }
 	}
 	export class AuditLogQuery {
@@ -355,7 +378,12 @@ export namespace models {
 	    rule_id: string;
 	    rule_name: string;
 	    passed: boolean;
+	    status: string;
+	    category: string;
+	    expected: string;
+	    risk: string;
 	    details: string;
+	    evidence: string;
 	    severity: string;
 	    remediation: string;
 	    // Go type: time
@@ -372,7 +400,12 @@ export namespace models {
 	        this.rule_id = source["rule_id"];
 	        this.rule_name = source["rule_name"];
 	        this.passed = source["passed"];
+	        this.status = source["status"];
+	        this.category = source["category"];
+	        this.expected = source["expected"];
+	        this.risk = source["risk"];
 	        this.details = source["details"];
+	        this.evidence = source["evidence"];
 	        this.severity = source["severity"];
 	        this.remediation = source["remediation"];
 	        this.created_at = this.convertValues(source["created_at"], null);
@@ -400,6 +433,8 @@ export namespace models {
 	    id: string;
 	    name: string;
 	    description: string;
+	    category: string;
+	    risk: string;
 	    pattern: string;
 	    must_match: boolean;
 	    vendor: string;
@@ -418,6 +453,8 @@ export namespace models {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.category = source["category"];
+	        this.risk = source["risk"];
 	        this.pattern = source["pattern"];
 	        this.must_match = source["must_match"];
 	        this.vendor = source["vendor"];
@@ -555,6 +592,7 @@ export namespace models {
 	    model: string;
 	    os_version: string;
 	    location: string;
+	    contact: string;
 	    uptime_seconds: number;
 	    mac_address: string;
 	    serial_number: string;
@@ -566,6 +604,9 @@ export namespace models {
 	    description: string;
 	    // Go type: time
 	    last_seen_at?: any;
+	    // Go type: time
+	    last_connectivity_check_at?: any;
+	    connectivity_status: string;
 	    // Go type: time
 	    created_at: any;
 	    // Go type: time
@@ -584,6 +625,7 @@ export namespace models {
 	        this.model = source["model"];
 	        this.os_version = source["os_version"];
 	        this.location = source["location"];
+	        this.contact = source["contact"];
 	        this.uptime_seconds = source["uptime_seconds"];
 	        this.mac_address = source["mac_address"];
 	        this.serial_number = source["serial_number"];
@@ -594,6 +636,8 @@ export namespace models {
 	        this.credential_id = source["credential_id"];
 	        this.description = source["description"];
 	        this.last_seen_at = this.convertValues(source["last_seen_at"], null);
+	        this.last_connectivity_check_at = this.convertValues(source["last_connectivity_check_at"], null);
+	        this.connectivity_status = source["connectivity_status"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }
@@ -636,88 +680,6 @@ export namespace models {
 	        this.name = source["name"];
 	        this.description = source["description"];
 	        this.content = source["content"];
-	        this.created_at = this.convertValues(source["created_at"], null);
-	        this.updated_at = this.convertValues(source["updated_at"], null);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class PortState {
-	    id: string;
-	    device_id: string;
-	    if_index: number;
-	    if_name: string;
-	    if_alias: string;
-	    if_type: number;
-	    admin_status: number;
-	    oper_status: number;
-	    speed_mbps: number;
-	    // Go type: time
-	    first_seen_at: any;
-	    // Go type: time
-	    last_seen_at: any;
-	    // Go type: time
-	    last_up_at?: any;
-	    // Go type: time
-	    last_down_at?: any;
-	    // Go type: time
-	    last_status_change_at?: any;
-	    up_transitions: number;
-	    down_transitions: number;
-	    last_mac: string;
-	    // Go type: time
-	    last_mac_seen_at?: any;
-	    has_lldp_neighbor: boolean;
-	    classification: string;
-	    confidence: number;
-	    // Go type: time
-	    created_at: any;
-	    // Go type: time
-	    updated_at: any;
-	
-	    static createFrom(source: any = {}) {
-	        return new PortState(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.device_id = source["device_id"];
-	        this.if_index = source["if_index"];
-	        this.if_name = source["if_name"];
-	        this.if_alias = source["if_alias"];
-	        this.if_type = source["if_type"];
-	        this.admin_status = source["admin_status"];
-	        this.oper_status = source["oper_status"];
-	        this.speed_mbps = source["speed_mbps"];
-	        this.first_seen_at = this.convertValues(source["first_seen_at"], null);
-	        this.last_seen_at = this.convertValues(source["last_seen_at"], null);
-	        this.last_up_at = this.convertValues(source["last_up_at"], null);
-	        this.last_down_at = this.convertValues(source["last_down_at"], null);
-	        this.last_status_change_at = this.convertValues(source["last_status_change_at"], null);
-	        this.up_transitions = source["up_transitions"];
-	        this.down_transitions = source["down_transitions"];
-	        this.last_mac = source["last_mac"];
-	        this.last_mac_seen_at = this.convertValues(source["last_mac_seen_at"], null);
-	        this.has_lldp_neighbor = source["has_lldp_neighbor"];
-	        this.classification = source["classification"];
-	        this.confidence = source["confidence"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }
@@ -879,128 +841,6 @@ export namespace ssh {
 	        this.Duration = source["Duration"];
 	    }
 	}
-
-}
-
-export namespace topology {
-	
-	export class Edge {
-	    id: string;
-	    source: string;
-	    target: string;
-	    label: string;
-	    link_type: string;
-	    local_port: string;
-	    remote_port: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Edge(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.source = source["source"];
-	        this.target = source["target"];
-	        this.label = source["label"];
-	        this.link_type = source["link_type"];
-	        this.local_port = source["local_port"];
-	        this.remote_port = source["remote_port"];
-	    }
-	}
-	export class RenderHint {
-	    terminal_color: string;
-	    show_poe_icon: boolean;
-	    terminal_index: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new RenderHint(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.terminal_color = source["terminal_color"];
-	        this.show_poe_icon = source["show_poe_icon"];
-	        this.terminal_index = source["terminal_index"];
-	    }
-	}
-	export class Node {
-	    id: string;
-	    label: string;
-	    ip: string;
-	    vendor: string;
-	    model: string;
-	    hint: RenderHint;
-	    location: string;
-	    status: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Node(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.label = source["label"];
-	        this.ip = source["ip"];
-	        this.vendor = source["vendor"];
-	        this.model = source["model"];
-	        this.hint = this.convertValues(source["hint"], RenderHint);
-	        this.location = source["location"];
-	        this.status = source["status"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class Graph {
-	    nodes: Node[];
-	    edges: Edge[];
-	
-	    static createFrom(source: any = {}) {
-	        return new Graph(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.nodes = this.convertValues(source["nodes"], Node);
-	        this.edges = this.convertValues(source["edges"], Edge);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	
 
 }
 

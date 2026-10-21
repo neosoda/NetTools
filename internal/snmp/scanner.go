@@ -38,6 +38,10 @@ type ScanResult struct {
 	Error     error
 }
 
+// MaxScanTargets prevents an accidental broad CIDR from overwhelming the
+// workstation or the network. Larger scopes should be split deliberately.
+const MaxScanTargets = 1024
+
 // DefaultOIDs are the standard OIDs to collect during a scan
 var DefaultOIDs = []string{
 	"1.3.6.1.2.1.1.1.0",    // sysDescr
@@ -66,24 +70,9 @@ func Scan(ctx context.Context, params ScanParams, progressCb func(ip string, don
 		}
 	}
 
-	var ips []string
-	var err error
-
-	if len(params.IPs) > 0 {
-		// Use explicit IP list, deduplicate
-		seen := map[string]bool{}
-		for _, ip := range params.IPs {
-			ip = strings.TrimSpace(ip)
-			if ip != "" && !seen[ip] {
-				ips = append(ips, ip)
-				seen[ip] = true
-			}
-		}
-	} else {
-		ips, err = cidrToIPs(params.CIDR)
-		if err != nil {
-			return nil, fmt.Errorf("invalid CIDR %s: %w", params.CIDR, err)
-		}
+	ips, err := resolveTargets(params)
+	if err != nil {
+		return nil, err
 	}
 
 	workers := params.Workers
@@ -143,6 +132,43 @@ func Scan(ctx context.Context, params ScanParams, progressCb func(ip string, don
 	}
 
 	return allResults, nil
+}
+
+func resolveTargets(params ScanParams) ([]string, error) {
+	var ips []string
+	if len(params.IPs) > 0 {
+		seen := make(map[string]struct{}, len(params.IPs))
+		for _, raw := range params.IPs {
+			ip := net.ParseIP(strings.TrimSpace(raw))
+			if ip == nil || ip.To4() == nil {
+				return nil, fmt.Errorf("invalid IPv4 target: %s", raw)
+			}
+			canonical := ip.To4().String()
+			if _, ok := seen[canonical]; !ok {
+				seen[canonical] = struct{}{}
+				ips = append(ips, canonical)
+				if len(ips) > MaxScanTargets {
+					return nil, fmt.Errorf("scan target limit is %d", MaxScanTargets)
+				}
+			}
+		}
+	} else {
+		if strings.TrimSpace(params.CIDR) == "" {
+			return nil, fmt.Errorf("no scan targets")
+		}
+		var err error
+		ips, err = cidrToIPs(params.CIDR)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CIDR %s: %w", params.CIDR, err)
+		}
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no scan targets")
+	}
+	if len(ips) > MaxScanTargets {
+		return nil, fmt.Errorf("scan has %d targets; limit is %d", len(ips), MaxScanTargets)
+	}
+	return ips, nil
 }
 
 // snmpAttempt tries one SNMP GET against ip with the given community and version.
@@ -297,18 +323,35 @@ func formatMAC(b []byte) string {
 func cidrToIPs(cidr string) ([]string, error) {
 	// Handle single IP
 	if !contains(cidr, '/') {
-		return []string{cidr}, nil
+		ip := net.ParseIP(strings.TrimSpace(cidr))
+		if ip == nil || ip.To4() == nil {
+			return nil, fmt.Errorf("IPv4 address required")
+		}
+		return []string{ip.To4().String()}, nil
 	}
 
 	ip, ipNet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return nil, err
 	}
+	if ip.To4() == nil || ipNet.IP.To4() == nil {
+		return nil, fmt.Errorf("IPv4 CIDR required")
+	}
+	ip = ip.To4()
+	ipNet.IP = ipNet.IP.To4()
+	ones, bits := ipNet.Mask.Size()
+	addresses := uint64(1) << uint(bits-ones)
+	targets := addresses
+	if bits-ones > 1 {
+		targets -= 2
+	}
+	if targets > uint64(MaxScanTargets) {
+		return nil, fmt.Errorf("scan target limit is %d", MaxScanTargets)
+	}
 
 	var ips []string
 	for ip4 := ip.Mask(ipNet.Mask); ipNet.Contains(ip4); incrementIP(ip4) {
 		// Skip network and broadcast for /24 and smaller
-		ones, bits := ipNet.Mask.Size()
 		if bits-ones <= 1 {
 			ips = append(ips, ip4.String())
 			continue

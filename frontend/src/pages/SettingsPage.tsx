@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Save, CheckCircle } from 'lucide-react'
+import { Save, CheckCircle, Activity, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -17,6 +17,10 @@ export default function SettingsPage() {
   const [showCredModal, setShowCredModal] = useState(false)
   const [editCred, setEditCred] = useState<any>(null)
   const [confirmDeleteCredId, setConfirmDeleteCredId] = useState<string | null>(null)
+  const [testingCred, setTestingCred] = useState<any>(null)
+  const [testIp, setTestIp] = useState('')
+  const [testResult, setTestResult] = useState<any>(null)
+  const [isTesting, setIsTesting] = useState(false)
 
   const { data: fetchedSettings } = useQuery({ queryKey: ['settings'], queryFn: () => backend.GetSettings() })
   const { data: credentials = [], refetch: refetchCreds } = useQuery({ queryKey: ['credentials'], queryFn: () => backend.GetCredentials() })
@@ -92,6 +96,20 @@ export default function SettingsPage() {
     }))
   }
 
+  const handleRunTest = async () => {
+    if (!testingCred || !testIp.trim()) return
+    setIsTesting(true)
+    setTestResult(null)
+    try {
+      const res = await backend.TestSNMPHostWithCredential(testIp.trim(), testingCred.id, 5)
+      setTestResult(res)
+    } catch (e: any) {
+      setTestResult({ ip: testIp.trim(), reachable: false, error: e?.message || String(e) })
+    } finally {
+      setIsTesting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       <PageHeader title="Paramètres" />
@@ -111,6 +129,18 @@ export default function SettingsPage() {
             </div>
             <div className="relative z-10 space-y-5">
               <Input label="Répertoire de backups" value={settings.backup_dir} onChange={e => setSettings((s: any) => ({ ...s, backup_dir: e.target.value }))} />
+              <label className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.ephemeral_inventory)}
+                  onChange={e => setSettings((s: any) => ({ ...s, ephemeral_inventory: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4 accent-amber-400"
+                />
+                <span>
+                  <span className="block font-medium text-slate-200">Réinitialiser l’inventaire à chaque démarrage</span>
+                  <span className="text-xs text-slate-500">Désactivé par défaut : l’inventaire est conservé entre les sessions. Activez-le seulement pour un poste éphémère.</span>
+                </span>
+              </label>
               <div className="pt-2">
                 <Button variant="primary" loading={saveMutation.isPending} onClick={() => saveMutation.mutate(settings)} className="px-6 shadow-blue-500/25">
                   <Save className="w-4 h-4" /> Sauvegarder les paramètres
@@ -163,6 +193,7 @@ export default function SettingsPage() {
                       </div>
                     </td>
                     <td className="py-3 px-5 flex justify-end gap-1.5">
+                      <Button size="sm" variant="ghost" className="bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs" onClick={() => { setTestingCred(c); setTestIp(''); setTestResult(null); }}>Tester</Button>
                       <Button size="sm" variant="ghost" className="bg-white/[0.02]" onClick={() => { setEditCred(c); setShowCredModal(true) }}>Éditer</Button>
                       {confirmDeleteCredId === c.id ? (
                         <div className="flex items-center bg-red-500/10 rounded border border-red-500/20 px-1">
@@ -223,6 +254,105 @@ export default function SettingsPage() {
             <Button type="submit" variant="primary" loading={saveCredMutation.isPending} className="px-6 shadow-blue-500/25">Sauvegarder</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Diagnostic SNMP */}
+      <Modal open={!!testingCred} onClose={() => setTestingCred(null)} title={`Diagnostic SNMP — ${testingCred?.name || ''}`} size="md">
+        <div className="space-y-4">
+          <div className="p-3 bg-slate-950/40 rounded-xl border border-white/[0.04] text-xs space-y-1">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Version SNMP :</span>
+              <span className="font-bold text-blue-400">{testingCred?.snmp_version || 'v2c'}</span>
+            </div>
+            {testingCred?.snmp_version === 'v3' ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Utilisateur USM :</span>
+                  <span className="font-mono text-slate-200">{testingCred?.snmp_username || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Niveau de sécurité :</span>
+                  <span className="text-slate-200">
+                    {!testingCred?.snmp_auth_protocol || testingCred.snmp_auth_protocol === 'NONE'
+                      ? 'noAuthNoPriv'
+                      : (!testingCred?.snmp_priv_protocol || testingCred.snmp_priv_protocol === 'NONE' ? 'authNoPriv' : 'authPriv')}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Authentification :</span>
+                  <span className="text-slate-200">{testingCred?.snmp_auth_protocol || 'NONE'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Chiffrement :</span>
+                  <span className="text-slate-200">{testingCred?.snmp_priv_protocol || 'NONE'}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between">
+                <span className="text-slate-400">Communauté :</span>
+                <span className="text-slate-200">{testingCred?.has_snmp_community ? '••••••••' : 'public (défaut)'}</span>
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={e => { e.preventDefault(); handleRunTest(); }} className="space-y-4">
+            <Input
+              label="Adresse IP cible de l'équipement *"
+              placeholder="ex: 192.168.1.1 ou 10.0.0.254"
+              value={testIp}
+              required
+              onChange={e => setTestIp(e.target.value)}
+            />
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setTestingCred(null)}>Fermer</Button>
+              <Button type="submit" variant="primary" loading={isTesting} disabled={!testIp.trim()}>
+                <Activity className="w-4 h-4 mr-1.5" />
+                Interroger l'hôte
+              </Button>
+            </div>
+          </form>
+
+          {testResult && (
+            <div className={`p-4 rounded-xl border ${testResult.reachable ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-red-950/20 border-red-500/30'} space-y-2 text-xs animate-in fade-in`}>
+              <div className="flex items-center gap-2 font-bold">
+                {testResult.reachable ? (
+                  <>
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-400">Communication SNMP établie avec succès</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 text-red-400" />
+                    <span className="text-red-400">Échec de la communication SNMP</span>
+                  </>
+                )}
+              </div>
+
+              {testResult.error && (
+                <p className="text-red-300 font-mono text-[11px] bg-red-950/40 p-2 rounded">
+                  {testResult.error}
+                </p>
+              )}
+
+              {testResult.data && Object.keys(testResult.data).length > 0 && (
+                <div className="space-y-1 pt-1 border-t border-white/[0.04] text-slate-300">
+                  {testResult.data.sysName && (
+                    <div><span className="text-slate-500">Nom système :</span> {testResult.data.sysName}</div>
+                  )}
+                  {testResult.data.sysDescr && (
+                    <div className="truncate" title={testResult.data.sysDescr}>
+                      <span className="text-slate-500">Description :</span> {testResult.data.sysDescr}
+                    </div>
+                  )}
+                  {testResult.data.sysUpTime && (
+                    <div><span className="text-slate-500">Uptime :</span> {testResult.data.sysUpTime}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   )

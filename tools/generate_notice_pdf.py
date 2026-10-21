@@ -1,29 +1,47 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """
 NetTools — Générateur de notice PDF
-Convertit NOTICE.md en PDF professionnel via Playwright + Chromium
+Génère les notices HTML depuis NOTICE.md, et un PDF sur demande.
 """
 
+import argparse
+import base64
+import json
 import re
-import sys
 import os
+from html import escape
 from pathlib import Path
 import markdown
+from markdown.extensions.toc import slugify_unicode
 
 BASE_DIR = Path(__file__).parent.parent
 NOTICE_MD = BASE_DIR / "NOTICE.md"
 OUTPUT_HTML = BASE_DIR / "tools" / "notice_rendered.html"
-OUTPUT_PDF = BASE_DIR / "NOTICE_NetworkTools.pdf"
+OUTPUT_PDF = BASE_DIR / "Notice_Utilisation_NetTools.pdf"
 
 
 def md_to_html(text: str) -> str:
     md = markdown.Markdown(
-        extensions=["tables", "fenced_code", "toc", "attr_list", "def_list"]
+        extensions=["tables", "fenced_code", "toc", "attr_list", "def_list"],
+        extension_configs={"toc": {"slugify": slugify_unicode}},
     )
     return md.convert(text)
 
 
 def build_html(body_html: str) -> str:
+    font_license = escape((BASE_DIR / "tools/fonts/OFL.txt").read_text(encoding="utf-8"))
+    version = json.loads((BASE_DIR / "wails.json").read_text())["info"]["productVersion"]
+    go_mod = (BASE_DIR / "go.mod").read_text()
+    go_version = re.search(r"^toolchain go(\S+)", go_mod, re.MULTILINE).group(1)
+    react_version = json.loads((BASE_DIR / "frontend/package.json").read_text())["dependencies"]["react"].lstrip("^").split(".")[0]
+    font_data = base64.b64encode((BASE_DIR / "tools/fonts/inter-400.woff2").read_bytes()).decode("ascii")
+    logo_data = base64.b64encode((BASE_DIR / "frontend/src/assets/images/icon.png").read_bytes()).decode("ascii")
+    headings = re.findall(r'<h2\s+id="([^"]+)"[^>]*>(.*?)</h2>', body_html, re.DOTALL)
+    toc_items = "\n".join(
+        f'<a class="toc-item" href="#{escape(anchor, quote=True)}"><span class="toc-num">{index:02d}</span><span class="toc-label">{title}</span></a>'
+        for index, (anchor, title) in enumerate(headings, 1)
+    )
     return f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -35,7 +53,13 @@ def build_html(body_html: str) -> str:
 /* ──────────────────────────────────────────────
    FONTS
 ────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@font-face {{
+  font-family: 'Inter';
+  src: url(data:font/woff2;base64,{font_data}) format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}}
 
 /* ──────────────────────────────────────────────
    VARIABLES
@@ -117,6 +141,12 @@ body {{
   position: relative; z-index: 1;
 }}
 
+.cover-logo img {{
+  width: 112px;
+  height: auto;
+  object-fit: contain;
+}}
+
 .cover-title {{
   font-size: 30pt;
   font-weight: 700;
@@ -159,10 +189,12 @@ body {{
   bottom: 40px;
   left: 0; right: 0;
   display: flex;
-  justify-content: space-between;
-  padding: 0 48px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 0 24px;
   font-size: 8pt;
-  color: #475569;
+  color: #94a3b8;
   z-index: 1;
 }}
 
@@ -507,6 +539,15 @@ hr {{
 /* ──────────────────────────────────────────────
    PRINT
 ────────────────────────────────────────────── */
+@media screen and (max-width: 640px) {{
+  body {{ overflow-wrap: anywhere; }}
+  .toc-page {{ padding: 32px 24px; }}
+  .toc-entries {{ grid-template-columns: minmax(0, 1fr); gap: 8px; }}
+  .content {{ padding: 0 24px 40px; }}
+  .content table {{ display: block; max-width: 100%; overflow-x: auto; }}
+  thead th, tbody td:first-child {{ white-space: normal; }}
+}}
+
 @media print {{
   @page {{
     margin: 18mm 16mm 20mm;
@@ -535,22 +576,22 @@ hr {{
 
 <!-- ══════════════════════ COVER PAGE ══════════════════════ -->
 <div class="cover">
-  <div class="cover-logo">🌐</div>
+  <div class="cover-logo"><img src="data:image/png;base64,{logo_data}" alt="Logo NetTools" width="112" height="100"></div>
   <div class="cover-title">NetTools</div>
   <div class="cover-line"></div>
   <div class="cover-subtitle">Notice d'utilisation complète</div>
   <div class="cover-badges">
     <span class="badge">Wails v2</span>
-    <span class="badge">Go 1.24+</span>
-    <span class="badge">React 18</span>
+    <span class="badge">Go {escape(go_version)}</span>
+    <span class="badge">React {escape(react_version)}</span>
     <span class="badge">SQLite</span>
     <span class="badge">SSH multi-vendor</span>
-    <span class="badge">SNMP v2c/v3</span>
+    <span class="badge">SNMP v1/v2c/v3</span>
   </div>
   <div class="cover-meta">
     <span>NetTools — Administration réseau</span>
-    <span>Version 1.4.0</span>
-    <span>Usage interne</span>
+    <span>Produit {escape(version)} · documentation courante</span>
+    <span>Code original : Apache 2.0 · Polices : OFL 1.1</span>
   </div>
 </div>
 
@@ -561,29 +602,14 @@ hr {{
     <span class="toc-header-label">Table des matières</span>
   </div>
   <div class="toc-entries">
-    <div class="toc-item"><span class="toc-num">01</span><span class="toc-label">Présentation générale</span></div>
-    <div class="toc-item"><span class="toc-num">02</span><span class="toc-label">Installation et premier lancement</span></div>
-    <div class="toc-item"><span class="toc-num">03</span><span class="toc-label">Interface générale</span></div>
-    <div class="toc-item"><span class="toc-num">04</span><span class="toc-label">Gestion des credentials</span></div>
-    <div class="toc-item"><span class="toc-num">05</span><span class="toc-label">Découverte réseau (SNMP)</span></div>
-    <div class="toc-item"><span class="toc-num">06</span><span class="toc-label">Inventaire des équipements</span></div>
-    <div class="toc-item"><span class="toc-num">07</span><span class="toc-label">Backups SSH</span></div>
-    <div class="toc-item"><span class="toc-num">08</span><span class="toc-label">Comparateur de configurations</span></div>
-    <div class="toc-item"><span class="toc-num">09</span><span class="toc-label">Audit de conformité</span></div>
-    <div class="toc-item"><span class="toc-num">10</span><span class="toc-label">Playbooks SSH</span></div>
-    <div class="toc-item"><span class="toc-num">11</span><span class="toc-label">Planificateur de tâches</span></div>
-    <div class="toc-item"><span class="toc-num">12</span><span class="toc-label">Journaux d'activité</span></div>
-    <div class="toc-item"><span class="toc-num">13</span><span class="toc-label">Topologie réseau</span></div>
-    <div class="toc-item"><span class="toc-num">14</span><span class="toc-label">Paramètres</span></div>
-    <div class="toc-item"><span class="toc-num">15</span><span class="toc-label">Workflows types</span></div>
-    <div class="toc-item"><span class="toc-num">16</span><span class="toc-label">Référence technique</span></div>
-    <div class="toc-item"><span class="toc-num">17</span><span class="toc-label">Dépannage</span></div>
+    {toc_items}
   </div>
 </div>
 
 <!-- ══════════════════════ CONTENT ══════════════════════ -->
 <div class="content">
 {body_html}
+<details><summary>Attribution et licence de la police Inter (OFL 1.1)</summary><pre>{font_license}</pre></details>
 </div>
 
 </body>
@@ -637,15 +663,15 @@ def post_process_html(html: str) -> str:
     return html
 
 
-def generate_pdf(html_path: Path, pdf_path: Path):
+def generate_pdf(html_path: Path, pdf_path: Path, chromium_executable=None):
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(executable_path=chromium_executable)
         page = browser.new_page()
 
-        # Load local HTML file
-        page.goto(html_path.as_uri(), wait_until="networkidle")
+        # Assets are embedded, so printing needs no file-URL or network access.
+        page.set_content(html_path.read_text(encoding="utf-8"), wait_until="networkidle")
 
         # Wait for fonts to load
         page.wait_for_timeout(2000)
@@ -681,27 +707,36 @@ def generate_pdf(html_path: Path, pdf_path: Path):
         browser.close()
 
 
+def html_for_path(full_html: str, output_path: Path) -> str:
+    """Keep local document links valid in both root and tools HTML outputs."""
+    def rewrite(match):
+        target = match.group(1)
+        if target.startswith(("#", "http:", "https:", "mailto:", "data:")):
+            return match.group(0)
+        path, separator, fragment = target.partition("#")
+        relative = os.path.relpath(BASE_DIR / path, output_path.parent).replace(os.sep, "/")
+        return 'href="' + escape(relative, quote=True) + separator + fragment + '"'
+    return re.sub(r'href="([^"\n]+)"', rewrite, full_html)
+
+
 def main():
-    print("[1/5] Lecture de NOTICE.md...")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--pdf", action="store_true", help="Also generate a PDF with Playwright/Chromium")
+    parser.add_argument("--pdf-output", type=Path, default=OUTPUT_PDF)
+    parser.add_argument("--chromium-executable", help="Use an installed Chromium executable")
+    args = parser.parse_args()
     md_text = NOTICE_MD.read_text(encoding="utf-8")
-
-    print("[2/5] Conversion Markdown -> HTML...")
-    body_html = md_to_html(md_text)
-    body_html = post_process_html(body_html)
-
-    print("[3/5] Application du theme et mise en page...")
+    body_html = post_process_html(md_to_html(md_text))
     full_html = build_html(body_html)
-
-    OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_HTML.write_text(full_html, encoding="utf-8")
-    print(f"      HTML intermediaire -> {OUTPUT_HTML.name}")
-
-    print("[4/5] Generation du PDF via Playwright/Chromium...")
-    generate_pdf(OUTPUT_HTML, OUTPUT_PDF)
-
-    size_kb = OUTPUT_PDF.stat().st_size // 1024
-    print(f"[5/5] PDF genere : {OUTPUT_PDF}")
-    print(f"      Taille : {size_kb} Ko")
+    for path in [OUTPUT_HTML, BASE_DIR / "Notice_NetTools_page.html"]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(html_for_path(full_html, path), encoding="utf-8")
+        print(f"HTML generated: {path.relative_to(BASE_DIR)}")
+    if args.pdf:
+        destination = args.pdf_output.resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        generate_pdf(OUTPUT_HTML, destination, args.chromium_executable)
+        print(f"PDF generated: {destination}")
 
 
 if __name__ == "__main__":

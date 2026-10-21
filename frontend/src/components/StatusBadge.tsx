@@ -7,6 +7,7 @@ interface StatusBadgeProps {
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   success: { label: 'Succès', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' },
+  suspect: { label: 'À vérifier', className: 'bg-amber-500/10 text-amber-300 border border-amber-500/30' },
   failed:  { label: 'Échec',  className: 'bg-red-500/10 text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]' },
   running: { label: 'En cours', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.1)] pulse-dot' },
   online:  { label: 'En ligne', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' },
