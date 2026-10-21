@@ -5,6 +5,10 @@ Les corrections, tests, documents et améliorations génériques sont bienvenus.
 Respectez le [code de conduite](CODE_OF_CONDUCT.md). Les vulnérabilités suivent
 [SECURITY.md](SECURITY.md), pas une issue publique.
 
+Le [guide de développement](docs/DEVELOPMENT.md) rassemble les commandes par
+plateforme, les contrôles, les outils facultatifs et la génération des notices.
+L’[architecture](docs/ARCHITECTURE.md) décrit les responsabilités des modules.
+
 ## Installer et vérifier
 
 Prérequis : Git, Go **1.26.10** (toolchain de `go.mod`), Node.js **22.22+**
@@ -43,8 +47,9 @@ graphique. Le serveur Vite seul ne fait pas fonctionner le backend Wails.
 L'exécuteur facultatif Netmiko requiert Python 3.10+ et `netmiko` dans un
 virtualenv accessible à `python3`, depuis la racine du projet. Il n'a pas de
 lockfile Python : versions, dépendances et licences doivent être revues avant
-sa distribution. La génération facultative des PDF utilise Markdown,
-Playwright et Chromium ; elle n'est pas requise pour compiler l'application.
+sa distribution. La génération facultative des notices utilise les versions de Markdown et
+Playwright dans `tools/requirements-docs.txt`, avec Chromium seulement pour
+le PDF ; elle n'est pas requise pour compiler l'application.
 Aucun équipement réel ni secret n'est nécessaire aux tests unitaires.
 
 ## Proposer une modification

@@ -2,9 +2,24 @@
   "name": "nettools",
   "private": true,
   "scripts": {
-    "test": "go test ./internal/... -count=1",
-    "typecheck": "npx tsc --noEmit -p frontend/tsconfig.json",
-    "build": "wails build -m && git checkout -- frontend/dist/.keep"
+    "dev": "wails dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test": "go test -mod=readonly ./internal/... -count=1 && npm run test:app",
+    "test:app": "go test -mod=readonly app.go app_inventory_test.go -count=1",
+    "typecheck": "npm exec --prefix frontend -- tsc --noEmit -p frontend/tsconfig.json",
+    "vet": "go vet -mod=readonly ./internal/...",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "wails build -m",
+    "check": "npm run typecheck && npm run build:frontend && npm test && npm run vet"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "description": "Application desktop Windows de découverte SNMP, inventaire, sauvegarde SSH et audit de configurations réseau.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neosoda/NetTools.git"
+  },
+  "homepage": "https://github.com/neosoda/NetTools#readme",
+  "bugs": {
+    "url": "https://github.com/neosoda/NetTools/issues"
+  }
 }

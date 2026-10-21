@@ -1,66 +1,66 @@
-.PHONY: dev build test lint clean install-tools frontend-deps frontend-build frontend-lint ci
+.PHONY: dev build build-windows test test-app test-cover fmt lint vet vet-desktop clean install-tools frontend-deps frontend-build frontend-lint docs docs-pdf docs-check ci
 
-# Variables
-APP_NAME := networktools
-WAILS := wails
+WAILS ?= wails
+WAILS_VERSION := v2.11.0
 
-# Install development tools
 install-tools:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	cd frontend && npm install
+	go install github.com/wailsapp/wails/v2/cmd/wails@$(WAILS_VERSION)
 
-# Install frontend dependencies
 frontend-deps:
-	cd frontend && npm install
+	npm ci --prefix frontend --legacy-peer-deps
 
-# Run in development mode
 dev:
 	$(WAILS) dev
 
-# Build production binary
-build: frontend-build
-	$(WAILS) build
+build:
+	$(WAILS) build -m
 
-# Build frontend only
-frontend-build:
-	cd frontend && npm run build
-
-# Build for Windows
 build-windows:
-	GOOS=windows GOARCH=amd64 $(WAILS) build
+	$(WAILS) build -m -platform windows/amd64
 
-# Run Go tests
+frontend-build:
+	npm run build:frontend
+
+# Portable backend and facade checks; no GUI or real device credentials needed.
 test:
-	mkdir -p frontend/dist && touch frontend/dist/.keep
-	go test ./internal/... -v -count=1
+	go test -mod=readonly ./internal/... -count=1
+	$(MAKE) test-app
 
-# Run tests with coverage
+test-app:
+	go test -mod=readonly app.go app_inventory_test.go -count=1
+
 test-cover:
-	go test ./internal/... -coverprofile=coverage.out -count=1
+	go test -mod=readonly ./internal/... -coverprofile=coverage.out -count=1
 	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
 
-# Run linter
-lint:
-	golangci-lint run ./...
-
-# Run Go vet
-vet:
-	go vet ./...
-
-# Frontend TypeScript check
-frontend-lint:
-	cd frontend && npx tsc --noEmit
-
-# Format code
 fmt:
 	go fmt ./...
 
-# Clean build artifacts
+vet:
+	go vet -mod=readonly ./internal/...
+
+# Requires the platform's Wails desktop prerequisites.
+vet-desktop:
+	go vet -mod=readonly ./...
+
+frontend-lint:
+	npm run typecheck
+
+lint: vet frontend-lint
+
+docs:
+	python3 tools/generate_notice_pdf.py
+
+docs-check: docs
+	python3 tools/check_docs.py
+	git diff --exit-code -- Notice_NetTools_page.html tools/notice_rendered.html
+
+docs-pdf:
+	python3 tools/generate_notice_pdf.py --pdf
+
 clean:
 	rm -rf build/bin
 	rm -f coverage.out coverage.html
 
-# Full CI check (what GitHub Actions runs)
-ci: vet test frontend-lint
-	@echo "CI checks passed"
+# Portable checks; GitHub also compiles Windows and scans security/licenses.
+ci: lint frontend-build test

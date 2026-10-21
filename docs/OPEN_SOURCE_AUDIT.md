@@ -183,3 +183,38 @@ et la CI distante reste à faire exécuter/vérifier par le mainteneur.
 La clé locale conservée a été vérifiée identique octet pour octet à l'ancienne
 version, sans affichage de sa valeur, et reste ignorée. Le clone propre ne la
 contient pas. L'état suivi du checkout est propre après les commits.
+
+
+## Harmonisation documentaire après la revue initiale
+
+À la demande du propriétaire, la présentation et les documents courants sont
+réécrits pour correspondre au code v1.6.0 : inventaire persistant par défaut,
+retrait de Topologie/Port Tracker, statuts d’audit fondés sur les preuves et
+absence de script de remédiation. Les archives de releases et le PDF v1.3.2
+restent inchangés et sont identifiés comme historiques.
+
+Les guides d’architecture, développement et support complètent le README.
+`NOTICE.md` devient la source unique des deux rendus HTML ; le PDF courant
+est généré localement sans remplacer l’archive. Les dépendances directes de
+génération sont épinglées, et une vérification CI des liens et des rendus est
+ajoutée. Les commandes npm/Makefile et l’installation Wails utilisent les
+versions verrouillées et préservent `frontend/dist/.keep`.
+
+La vérification visuelle révèle que `logo-universal.png` est le logo Wails,
+et non une création NetTools. Sa provenance est établie par identité SHA-256
+avec le template React TypeScript du module Wails 2.11.0 déjà vérifié par Go.
+Les attributions sont corrigées ; le visuel est conservé sans être réutilisé
+pour représenter NetTools. Cette constatation précise la déclaration générale
+du propriétaire concernant ses propres visuels.
+
+Validation complémentaire : commande `npm run check` réussie, compilation
+croisée Windows réussie, liens locaux contrôlés, rendu navigateur sans requête
+d’asset externe, sommaire HTML complet, génération PDF et extraction de son
+texte réussies. Les HTML se régénèrent de manière déterministe. Les fichiers
+Go et les tests métier n’ont pas été modifiés.
+
+La tentative de mise à jour de la description et des sujets GitHub renvoie
+HTTP 403 « Resource not accessible by integration ». Les métadonnées externes
+restent inchangées ; les valeurs proposées sont dans `GITHUB_PRESENTATION.md`.
+La PR reste en brouillon, sans fusion ni release ; les réserves de publication
+et de rotation Sentinel restent applicables.

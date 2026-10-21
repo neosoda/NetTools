@@ -3,7 +3,7 @@
   "name": "nettools",
   "outputfilename": "NetTools",
   "icon": "build/appicon.ico",
-  "frontend:install": "npm install --legacy-peer-deps",
+  "frontend:install": "npm ci --legacy-peer-deps",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
@@ -16,7 +16,7 @@
     "productName": "NetTools",
     "productVersion": "1.6.0",
     "copyright": "Copyright 2026 neosoda",
-    "comments": "Administration réseau et audit de conformité"
+    "comments": "Découverte SNMP, inventaire, sauvegarde SSH et audit réseau — code original sous Apache 2.0"
   },
   "windows": {
     "icon": "build/appicon.ico"

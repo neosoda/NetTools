@@ -12,7 +12,8 @@ utilisateur ; les attributions légales du projet sont dans `NOTICE`.
 | `frontend/wailsjs/runtime/` | Lea Anthony 2019-present, MIT | Copyright des fichiers et métadonnées du package ; texte MIT ajouté dans `LICENSES/Wails-MIT.txt` depuis Wails 2.11.0 |
 | Nunito WOFF2 | Nunito Project Authors, OFL-1.1 | `frontend/src/assets/fonts/OFL.txt`, conservé intact |
 | Inter WOFF2 | Rasmus Andersson / Inter Project Authors, OFL-1.1 | `tools/fonts/OFL.txt`, texte officiel upstream ; identité Inter vérifiée dans le fichier, licence confirmée par le propriétaire. Source exacte/version de l'artefact non archivée |
-| Logos et icônes NetTools | Création du propriétaire selon sa déclaration | Apache 2.0 pour ces créations originales ; pas de cession de droits sur des marques tierces |
+| `logo.png` et `icon.png` NetTools | Création du propriétaire selon sa déclaration | Apache 2.0 pour ces créations originales ; pas de cession de droits sur des marques tierces |
+| `frontend/src/assets/images/logo-universal.png` | Logo Wails issu du template officiel 2.11.0 | Identique au fichier du template React TypeScript (SHA-256 `dc2038243f0efaefc70fcd0ad863202610c64d36b6c023df6f8d1a29aad9f906`) ; conservé sous les attributions Wails/MIT, sans prétendre à des droits sur la marque Wails |
 
 ## Dépendances verrouillées
 
@@ -34,8 +35,11 @@ dans le binaire. Il ne remplace pas la lecture des textes de licences.
   notices combinées de SQLite/modernc et YAML. Les auteurs SQLite déclarent
   le moteur original domaine public ; cela ne dispense pas des obligations
   des wrappers et du code intégré.
-- Python/Netmiko et la génération de PDF ne sont pas verrouillés : leur
-  graphe et leurs licences ne sont pas validés pour une distribution embarquée.
+- Python/Netmiko ne dispose pas de verrouillage. Les versions directes des
+  outils de notices sont épinglées dans `tools/requirements-docs.txt`, sans
+  verrouillage exhaustif du graphe transitif. Ces outils facultatifs ne sont
+  pas embarqués dans NetTools ; leurs dépendances ne sont pas validées ici
+  comme composants d’une distribution applicative.
 - WebView2, GTK/WebKit et les runtimes système sont des prérequis distincts,
   sous leurs conditions propres. Ne les reconditionnez pas comme du code Apache.
 

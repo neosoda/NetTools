@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build --emptyOutDir false",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -43,5 +43,6 @@
     "picomatch": "^4.0.4",
     "react-remove-scroll-bar": "2.3.7"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "description": "Interface desktop React de NetTools, reliée au backend Go par Wails."
 }

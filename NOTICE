@@ -5,6 +5,9 @@ Original NetTools code is licensed under the Apache License, Version 2.0.
 See LICENSE for the license terms. Third-party works retain their own licenses.
 
 The bundled Wails runtime is Copyright (c) Lea Anthony 2019-present (MIT).
+The unused logo-universal.png is from the Wails 2.11.0 React TypeScript
+template; Wails attribution and MIT terms are retained. No trademark rights
+are granted by the NetTools license.
 Nunito: Copyright 2016 The Nunito Project Authors (contact@sansoxygen.com),
 licensed under SIL Open Font License 1.1; see frontend/src/assets/fonts/OFL.txt.
 Inter: Copyright (c) 2016 The Inter Project Authors
