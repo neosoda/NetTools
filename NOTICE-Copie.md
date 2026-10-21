@@ -292,8 +292,7 @@ Dans les scripts d'audit : `{{hostname}}`, `{{ip}}`, `{{vendor}}`.
 ---
 
 <div align="center">
-<p><strong>NetTools v1.3.2</strong> — © 2026 Tous droits réservés.</p>
-<p>Basé sur l'original de <em>Emmanuel</em> (decouverte2.4.py).</p>
+<p><strong>NetTools v1.3.2</strong> — © 2026 neosoda. Code original sous Apache License 2.0 ; composants tiers sous leurs licences respectives.</p>
 </div>
 ```
 

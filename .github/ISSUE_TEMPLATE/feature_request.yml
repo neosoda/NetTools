@@ -1,0 +1,20 @@
+name: Proposition
+description: Proposer une amélioration générique de NetTools
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Besoin ou problème
+      description: Utilisez des exemples synthétiques sans détails d'infrastructure privée.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solution proposée et alternatives
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Effets sur Windows, les données et les équipements

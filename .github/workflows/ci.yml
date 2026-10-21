@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Tests and Windows build
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26.10'
+          cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Download Go dependencies
+        run: go mod download
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+      - name: TypeScript
+        working-directory: frontend
+        run: npm exec -- tsc --noEmit
+      - name: Frontend production build
+        working-directory: frontend
+        run: npm run build -- --emptyOutDir false
+      - name: Go tests including application facade
+        run: go test -mod=readonly ./... -count=1
+      - name: Go vet
+        run: go vet -mod=readonly ./...
+      - name: Compile Windows desktop application
+        run: go build -mod=readonly -tags "desktop,production" -o build/bin/NetTools.exe .
+      - name: Verify dependency checksums
+        run: go mod verify
+      - name: Check tracked files were preserved
+        run: git diff --exit-code
+
+  dependency-security:
+    name: Dependency vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26.10'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: npm audit (including build tools)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+      - name: Install pinned vulnerability checker
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - name: Prepare embedded frontend assets
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps && npm run build -- --emptyOutDir false
+      - name: Go vulnerability analysis for the Windows product target
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: govulncheck -tags=desktop,production ./...
+
+  secrets:
+    name: Secrets in Git history
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26.10'
+      - name: Install pinned Gitleaks
+        run: go install github.com/zricethezav/gitleaks/v8@v8.30.0
+      - name: Scan all available history (redacted)
+        run: gitleaks git --redact=100 --log-opts=--all .
+
+  licenses:
+    name: Third-party license evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26.10'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - run: go mod download
+      - run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Gather dependency license and notice texts
+        run: python3 tools/dependency_licenses.py --bundle /tmp/THIRD_PARTY_LICENSES.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: third-party-license-texts
+          path: /tmp/THIRD_PARTY_LICENSES.txt
+          if-no-files-found: error

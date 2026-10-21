@@ -1,0 +1,29 @@
+name: Bug
+description: Signaler un dysfonctionnement reproductible, sans données sensibles
+body:
+  - type: markdown
+    attributes:
+      value: "Pour une vulnérabilité, suivez SECURITY.md et utilisez un canal privé. Ne joignez pas de vrais credentials, logs ou configurations réseau."
+  - type: input
+    id: version
+    attributes:
+      label: Version ou commit et système
+      placeholder: NetTools, Windows, WebView2
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Étapes de reproduction et exemple synthétique
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Résultat attendu et résultat observé
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Diagnostics expurgés et vérifications effectuées

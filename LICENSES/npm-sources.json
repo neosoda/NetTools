@@ -1,0 +1,82 @@
+{
+  "node_modules/@esbuild/linux-x64@0.28.1": {
+    "source": "https://raw.githubusercontent.com/evanw/esbuild/v0.28.1/LICENSE.md",
+    "file": "LICENSES/npm/b40ec5baec7bb34f.txt",
+    "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681"
+  },
+  "node_modules/@radix-ui/number@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-compose-refs@1.1.2": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-context@1.1.2": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-direction@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-id@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-use-callback-ref@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-use-escape-keydown@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-use-layout-effect@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-use-previous@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-use-rect@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/react-use-size@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@radix-ui/rect@1.1.1": {
+    "source": "https://raw.githubusercontent.com/radix-ui/primitives/fcef0668a5c827e5a4baac405474d75680f9a4eb/LICENSE",
+    "file": "LICENSES/npm/0e80a2d229d2fd4f.txt",
+    "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+  },
+  "node_modules/@rollup/rollup-linux-x64-gnu@4.60.2": {
+    "source": "https://raw.githubusercontent.com/rollup/rollup/v4.60.2/LICENSE.md",
+    "file": "LICENSES/npm/fa1bd040c5bdeefe.txt",
+    "sha256": "fa1bd040c5bdeefe65b3821cebf474f2733ce65df13089bd151dda1778e62fe8"
+  },
+  "node_modules/@rollup/rollup-linux-x64-musl@4.60.2": {
+    "source": "https://raw.githubusercontent.com/rollup/rollup/v4.60.2/LICENSE.md",
+    "file": "LICENSES/npm/fa1bd040c5bdeefe.txt",
+    "sha256": "fa1bd040c5bdeefe65b3821cebf474f2733ce65df13089bd151dda1778e62fe8"
+  },
+  "node_modules/react-remove-scroll/node_modules/react-remove-scroll-bar@2.3.7": {
+    "source": "https://raw.githubusercontent.com/theKashey/react-remove-scroll-bar/8ca9ba5ea52de03308fe8ced94f7b159a44d28ff/LICENSE",
+    "file": "LICENSES/npm/a79aae0c0f21990d.txt",
+    "sha256": "a79aae0c0f21990d9d963bb3c5a79cdcea9a46f8523ba55c58d7fe776b6ebc84"
+  }
+}

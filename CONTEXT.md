@@ -31,8 +31,8 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 ## Target Environment
 - OS cible: Windows 10/11 x64.
 - Runtime desktop: Wails v2 avec WebView2.
-- Runtime backend: Go 1.24.7 selon `go.mod`.
-- Runtime frontend de développement: Node.js 18+ minimum, Vite, React et TypeScript.
+- Runtime backend: Go 1.26.10 (toolchain) selon `go.mod`.
+- Runtime frontend de développement: Node.js 22.22+ minimum, Vite, React et TypeScript.
 - Données applicatives: `%APPDATA%\NetTools\` pour `nettools.db`, `settings.json` et `logs/`.
 - Backups: par défaut dans `%USERPROFILE%\Downloads\NetTools_Backups`, configurable via `settings.json`.
 - Base locale: SQLite via GORM, journal WAL, `busy_timeout=5000`, clés étrangères activées.
@@ -44,7 +44,7 @@ Informations manquantes ou ambiguës à revalider avant décision structurante :
 
 ## Architecture Overview
 - Backend: Go, package `main` pour la façade Wails, modules métier sous `internal/`.
-- Frontend: React 18, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, Zustand, Radix UI, ReactFlow.
+- Frontend: React 19, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, Zustand, Radix UI, ReactFlow.
 - Desktop bridge: Wails expose les méthodes de `App` au frontend et émet des événements runtime pour progression scan, backup, terminal et playbooks.
 - Persistance: SQLite + GORM, modèles dans `internal/db/models`.
 - Secrets: `internal/secret`, DPAPI Windows, fallback AES-256-GCM hors Windows.

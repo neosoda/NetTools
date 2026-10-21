@@ -14,3 +14,6 @@ OLD/
 *.md5 
 .serena/
 tmp/
+
+# Local Sentinel signing keys must never be published.
+.sentinel-sdd/integrity.key

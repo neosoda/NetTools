@@ -7,8 +7,8 @@
 **Plateforme complète de gestion réseau et d'audit de conformité pour administrateurs IT**
 
 [![GitHub release](https://img.shields.io/badge/Version-1.6.0-blue?logo=github)](../../releases)
-[![License](https://img.shields.io/badge/License-Proprietary-red)](./NOTICE.md)
-[![Go Version](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](./LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.26.10-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 
@@ -182,7 +182,7 @@
 │  └──────────────────────────────────────┘  │
 │                   ↕️                        │
 │  ┌──────────────────────────────────────┐  │
-│  │  Backend (Go 1.26.5)                 │  │
+│  │  Backend (Go 1.26.10)                 │  │
 │  │  • SNMP (gosnmp)                     │  │
 │  │  • SSH (x/crypto/ssh)                │  │
 │  │  • SQLite + GORM                     │  │
@@ -203,7 +203,7 @@
 |-----------|------------|------|
 | **Frontend** | React 19 + TypeScript | Interface moderne et réactive |
 | **Desktop** | Wails v2 | Framework de distribution |
-| **Backend** | Go 1.26.5 | Logique métier et communications |
+| **Backend** | Go 1.26.10 | Logique métier et communications |
 | **Database** | SQLite + GORM | Persistance des données |
 | **Réseau** | gosnmp, x/crypto/ssh | SNMP et SSH |
 | **UI Framework** | TailwindCSS | Design responsive |
@@ -354,9 +354,9 @@ nettools/
 
 ### Prérequis
 
-- **Go 1.26.5+**
+- **Go 1.26.10+**
 - **Node.js 22.22+**
-- **Wails CLI v2** : `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- **Wails CLI v2** : `go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0`
 - **Git**
 
 ### Installer les dépendances
@@ -366,8 +366,27 @@ nettools/
 go mod download
 
 # Frontend
-cd frontend && npm install --legacy-peer-deps
+cd frontend && npm ci --legacy-peer-deps
 ```
+
+### Vérification avant contribution
+
+```bash
+cd frontend
+npm ci --legacy-peer-deps
+npm exec -- tsc --noEmit
+npm run build -- --emptyOutDir false
+cd ..
+go test -mod=readonly ./internal/... -count=1
+go vet -mod=readonly ./internal/...
+```
+
+Windows 10/11 x64 reste la cible produit. Sous Debian/Ubuntu, une compilation
+Linux exige un compilateur C, `pkg-config`, GTK3 et WebKitGTK 4.1
+(`libgtk-3-dev libwebkit2gtk-4.1-dev`), et le tag `webkit2_41`.
+Une session graphique est nécessaire pour l'application Wails. Le serveur Vite
+seul ne valide pas les appels au backend desktop. Voir les instructions complètes
+et les limites du cloud dans [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ### Mode développement (hot-reload)
 
@@ -417,10 +436,10 @@ cd frontend && npx tsc --noEmit
 
 ### Bonnes pratiques
 
-✅ Les mots de passe ne sont jamais stockés en clair
-✅ Communication SSH chiffrée (crypto/ssh standard)
-✅ Base de données SQLite locale (pas de cloud)
-✅ Logs sensibles masqués en production
+- Le stockage applicatif chiffre les credentials ; relisez les exports et logs avant partage.
+- Les communications SSH utilisent `crypto/ssh` ; les clés d’hôte ne sont pas vérifiées actuellement.
+- La base SQLite reste locale.
+- Les risques connus et le signalement confidentiel sont décrits dans [SECURITY.md](./SECURITY.md).
 
 ---
 
@@ -484,16 +503,18 @@ Les contributions sont bienvenues ! Pour contribuer :
 **Avant de contribuer**, consultez [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
-##🙏 Crédits
-
-NetTools est l'évolution du script original decouverte2.4.py créé par Emmanuel. Merci pour cette base solide qui m'a inspiré ! 🙌
-
----
 
 ## 📜 Licence & Dépendances
 
-Ce projet utilise plusieurs bibliothèques open source.
-Voir [NOTICE.md](./NOTICE.md) pour la liste complète des dépendances et licences.
+Le code original NetTools est proposé sous [Apache License 2.0](./LICENSE).
+Copyright 2026 neosoda. Les composants tiers conservent leurs licences propres,
+notamment les polices sous SIL OFL 1.1. Voir [NOTICE](./NOTICE),
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) et le
+[rapport de migration](./docs/OPEN_SOURCE_AUDIT.md) pour les vérifications et limites.
+`NOTICE.md` est le manuel utilisateur, pas une liste d'attributions légales.
+
+Les contributions suivent [CONTRIBUTING.md](./CONTRIBUTING.md), le
+[code de conduite](./CODE_OF_CONDUCT.md) et la [politique de sécurité](./SECURITY.md).
 
 ---
 
