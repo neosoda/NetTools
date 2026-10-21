@@ -8,20 +8,22 @@ require (
 	github.com/billgraziano/dpapi v0.5.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/google/uuid v1.6.0
-	github.com/gosnmp/gosnmp v1.43.2
+	github.com/gosnmp/gosnmp v1.45.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/rs/zerolog v1.34.0
+	github.com/rs/zerolog v1.35.1
 	github.com/sergi/go-diff v1.4.0
-	github.com/wailsapp/wails/v2 v2.11.0
+	github.com/wailsapp/wails/v2 v2.17.0
 	github.com/xuri/excelize/v2 v2.11.1-0.20261003002531-6258dcebc4e2
-	golang.org/x/crypto v0.57.0
+	golang.org/x/crypto v0.58.0
 	gopkg.in/yaml.v3 v3.0.1
-	gorm.io/gorm v1.31.1
+	gorm.io/gorm v1.31.2
 )
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.16 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
@@ -53,8 +55,8 @@ require (
 	github.com/xuri/efp v0.0.2 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.5.0 // indirect

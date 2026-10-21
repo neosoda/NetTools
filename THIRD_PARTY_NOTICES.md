@@ -9,7 +9,7 @@ utilisateur ; les attributions légales du projet sont dans `NOTICE`.
 
 | Ressource | Attribution et licence | Preuve / limite |
 | --- | --- | --- |
-| `frontend/wailsjs/runtime/` | Lea Anthony 2019-present, MIT | Copyright des fichiers et métadonnées du package ; texte MIT ajouté dans `LICENSES/Wails-MIT.txt` depuis Wails 2.11.0 |
+| `frontend/wailsjs/runtime/` | Lea Anthony 2019-present, MIT | Copyright des fichiers et métadonnées du package ; runtime régénéré avec Wails 2.17.0 ; texte MIT conservé dans `LICENSES/Wails-MIT.txt` |
 | Nunito WOFF2 | Nunito Project Authors, OFL-1.1 | `frontend/src/assets/fonts/OFL.txt`, conservé intact |
 | Inter WOFF2 | Rasmus Andersson / Inter Project Authors, OFL-1.1 | `tools/fonts/OFL.txt`, texte officiel upstream ; identité Inter vérifiée dans le fichier, licence confirmée par le propriétaire. Source exacte/version de l'artefact non archivée |
 | `logo.png` et `icon.png` NetTools | Création du propriétaire selon sa déclaration | Apache 2.0 pour ces créations originales ; pas de cession de droits sur des marques tierces |
@@ -65,3 +65,13 @@ upstream retenue pour 2.3.7 annonce cette version et fournit son texte MIT.
 Les textes absents de certaines archives npm sont conservés dans `LICENSES/npm/`,
 avec URL immuable et SHA-256 dans `LICENSES/npm-sources.json`. Ces fichiers sont
 liés aux versions et chemins exacts ; une mise à jour exige une nouvelle revue.
+
+## Actualisation des outils de compilation
+
+L'intégration des mises à jour Dependabot utilise Vite 8 et Rolldown. Les
+bindings natifs Rolldown sont sous MIT ; leur licence officielle correspond
+à celle du package parent de la même version. Le collecteur inclut désormais
+aussi les fichiers `THIRD-PARTY-LICENSE`, afin de conserver les attributions
+intégrées par Rolldown et les autres outils. Les nouvelles bibliothèques Go
+comprennent `go-toast/v2` (choix MIT parmi `Unlicense OR MIT`) et `mimetype`
+(MIT). Leurs textes sont inclus dans le bundle généré.

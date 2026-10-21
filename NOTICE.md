@@ -1,8 +1,8 @@
 # NetTools — Notice d'utilisation
 
 Application desktop Windows de découverte, d'inventaire, de sauvegarde et
-d'audit réseau. Ce manuel décrit le périmètre du produit public v1.6.0 et de
-la branche préparant son passage sous Apache 2.0.
+d'audit réseau. Ce manuel décrit le périmètre du produit public v1.6.0 et les évolutions
+non publiées du code courant sous Apache 2.0.
 
 Le code original est sous Apache 2.0 ; les composants tiers conservent leurs
 licences. Consultez `LICENSE`, `NOTICE` et `THIRD_PARTY_NOTICES.md` pour les

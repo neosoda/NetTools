@@ -18,6 +18,8 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ### Sécurité et maintenance
 
+- Intégration validée des mises à jour Dependabot : Wails 2.17, Vite 8 et plugin React 6, Lucide 1, bibliothèques Go et actions GitHub récentes. Les cibles navigateur de Vite 7 sont conservées explicitement.
+
 - Toolchain Go et dépendances mises à jour dans la branche de migration ; détail et réserves dans `docs/OPEN_SOURCE_AUDIT.md`.
 - Ancienne clé HMAC Sentinel retirée du suivi avec autorisation et déclarée compromise, sans réécriture d'historique ; rotation externe requise avant toute nouvelle signature.
 

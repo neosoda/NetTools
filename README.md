@@ -105,13 +105,13 @@ des bibliothèques GTK/WebKit et une session graphique.
 | Go | 1.26.10, toolchain déclarée dans `go.mod` |
 | Node.js | 22.22+ ; Node 24 utilisé dans la CI |
 | npm | Installation via `npm ci --legacy-peer-deps` |
-| Wails CLI et module | 2.11.0 |
+| Wails CLI et module | 2.17.0 |
 
 ```bash
 git clone https://github.com/neosoda/NetTools.git
 cd NetTools
 go mod download
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
 npm ci --prefix frontend --legacy-peer-deps
 npm run typecheck
 npm run build:frontend

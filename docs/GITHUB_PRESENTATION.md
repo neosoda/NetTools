@@ -1,6 +1,6 @@
 # Présentation GitHub à appliquer
 
-Les fichiers de présentation sont mis à jour dans la branche de la PR #23.
+Les fichiers de présentation de la PR #23 ont été intégrés à `master`.
 L'intégration a reçu HTTP 403 lors des tentatives de modification des métadonnées
 du dépôt : le champ « À propos » et les sujets n'ont donc pas été modifiés.
 Le mainteneur peut appliquer les valeurs suivantes dans les réglages « About »
@@ -27,8 +27,8 @@ windows-desktop
 
 Ces sujets décrivent les technologies et fonctions actuelles. N'annoncez pas
 une nouvelle release ou une licence appliquée à tous les anciens binaires par
-ce simple changement de présentation. La licence Apache du code courant sera
-visible sur la branche par défaut après revue et fusion de la migration.
+ce simple changement de présentation. La licence Apache du code courant est désormais visible sur la branche par
+défaut après fusion de la migration ; cela ne relicencie pas les anciens binaires.
 
 ## Vérifications avant de mettre la présentation en avant
 

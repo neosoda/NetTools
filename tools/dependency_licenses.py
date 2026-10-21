@@ -21,7 +21,10 @@ def legal_files(directory):
         return []
     return sorted(
         p for p in directory.iterdir()
-        if p.is_file() and re.match(r"^(licen[cs]e|copying|notice|copyright)([.\-_]|$)", p.name, re.I)
+        if p.is_file() and re.match(
+            r"^(?:(?:third[-_ ]party|third[-_ ]parties)[-_ ]+)?"
+            r"(licen[cs]e|copying|notice|copyright)([.\-_]|$)", p.name, re.I
+        )
     )
 
 
