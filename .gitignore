@@ -14,3 +14,16 @@ OLD/
 *.md5 
 .serena/
 tmp/
+
+# Local Sentinel signing keys must never be published.
+.sentinel-sdd/integrity.key
+
+# Documentation virtualenv, current PDF and local coverage outputs.
+.venv-docs/
+Notice_Utilisation_NetTools.pdf
+coverage.out
+coverage.html
+
+# Python documentation caches.
+__pycache__/
+*.py[cod]

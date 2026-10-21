@@ -6,6 +6,23 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [Non publié]
+
+### Documentation et contribution
+
+- Migration proposée du code original sous Apache 2.0, avec conservation des attributions tierces.
+- README et manuel réécrits autour du périmètre courant : inventaire persistant par défaut, audit fondé sur les preuves et recommandations consultatives.
+- Guides de développement, architecture et support, notices HTML synchronisées et outils de génération hors ligne.
+- Modèles GitHub, code de conduite, politique de sécurité et contrôles CI ajoutés.
+- Commandes npm, Makefile et configuration Wails alignées sur l'installation verrouillée et les vérifications documentées.
+
+### Sécurité et maintenance
+
+- Toolchain Go et dépendances mises à jour dans la branche de migration ; détail et réserves dans `docs/OPEN_SOURCE_AUDIT.md`.
+- Ancienne clé HMAC Sentinel retirée du suivi avec autorisation et déclarée compromise, sans réécriture d'historique ; rotation externe requise avant toute nouvelle signature.
+
+Cette section décrit des modifications en préparation, sans annoncer une nouvelle release ni modifier les conditions des anciennes versions.
+
 ## [1.6.0] - 2026-10-16
 
 ### Ajouts

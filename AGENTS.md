@@ -12,13 +12,10 @@ These rules are mandatory for every AI coding agent working in this repository.
 
 This worktree is the **PUBLIC edition of NetTools**.
 
-Expected worktree:
+Expected worktree: the checkout whose origin is the public repository below.
+Cloud tasks may use `/workspace/NetTools`; contributor clones may use any path.
 
-```text
-A:\Projets\NetTools
-```
-
-Expected branch:
+Expected base branch (contributions use dedicated branches):
 
 ```text
 master
@@ -113,16 +110,16 @@ git remote -v
 Expected state:
 
 ```text
-Worktree: A:\Projets\NetTools
-Branch:   master
+Worktree: public NetTools checkout (any local path)
+Base:     master; contribution branch for changes
 Remote:   origin
 ```
 
-If the repository, branch, or remote does not match expectations, stop before editing, committing, merging, or pushing.
+Validate the public repository identity before editing. For contributions, create a dedicated branch from the selected checkout; do not switch or reset existing user work. An explicitly requested contribution branch is permitted. Stop if the repository or remote identity is unexpected.
 
 Do not silently switch branches or repositories to compensate for an unexpected state.
 
-If the working tree is clean, update the branch with:
+Only when explicitly updating a local `master` checkout with a clean working tree, use:
 
 ```bash
 git pull --ff-only origin master
@@ -140,7 +137,7 @@ Before implementation, classify the requested work.
 
 ## Generic change
 
-Implement on `master`.
+Implement on a dedicated contribution branch and open a pull request targeting `master`. Do not merge automatically.
 
 Examples:
 
@@ -210,17 +207,8 @@ If the answer is not clearly yes, do not publish it.
 
 # 4. Git Safety
 
-Normal publication target:
-
-```text
-master -> origin/master
-```
-
-Normal push:
-
-```bash
-git push origin master
-```
+Normal contribution target: a dedicated branch and a pull request to `master`.
+Do not push directly to `master` or merge without an explicit maintainer request.
 
 Before pushing, verify:
 
@@ -410,6 +398,6 @@ A task is complete only when:
 - no private/deployment-specific information leaked into Public;
 - no secrets were introduced;
 - the repository is left in a coherent state;
-- commit and push target the correct public branch when requested.
+- commits and pushes target the requested contribution branch; no automatic merge.
 
 These guidelines are working if they produce smaller diffs, fewer regressions, less duplication, and safer separation between Public NetTools and private downstream editions.

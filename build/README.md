@@ -1,68 +1,53 @@
-# Répertoire Build
+# Ressources de compilation NetTools
 
-Ce répertoire contient les fichiers de build et assets pour **NetTools**.
+Ce répertoire contient les assets et modèles de packaging utilisés par Wails.
+Windows 10/11 x64 avec WebView2 est la cible produit. Les autres plateformes
+ne bénéficient pas d'une garantie de support.
 
----
-
-## Structure
-
-```
+```text
 build/
-├── appicon.png           # Icône source (PNG) de l'application
-├── appicon.ico           # Icône Windows (ICO, 6 résolutions)
-├── bin/                  # Binaires compilés
-│   └── NetTools.exe      # Application Windows
-├── darwin/               # Fichiers spécifiques macOS
-│   ├── Info.plist
-│   └── Info.dev.plist
-└── windows/              # Fichiers spécifiques Windows
-    ├── icon.ico          # Icône Windows
-    ├── info.json         # Métadonnées de l'application
-    ├── wails.exe.manifest
-    └── installer/        # Fichiers installateur NSIS
+├── appicon.png                     Icône source de l'application
+├── bin/                            Sorties locales, ignorées par Git
+└── windows/
+    ├── icon.ico                    Icône Windows
+    ├── info.json                   Modèle de propriétés de l'exécutable
+    ├── wails.exe.manifest          Manifeste Windows
+    └── installer/                 Modèles NSIS
 ```
 
----
+`wails.json` définit le nom, la version, l'auteur et le copyright utilisés
+par les modèles Windows. Préservez les copyrights légitimes et les licences
+tierces ; la licence du code original n'annule pas leurs obligations.
 
-## Icône
+## Compiler
 
-L'icône de l'application (`appicon.ico`) a été générée depuis `frontend/src/assets/images/icon.png` avec 6 résolutions :
-- 16×16, 32×32, 48×48, 64×64, 128×128, 256×256
-
-Pour mettre à jour l'icône :
-1. Remplacer `frontend/src/assets/images/icon.png`
-2. Regénérer le fichier ICO :
-   ```python
-   from PIL import Image
-   img = Image.open('frontend/src/assets/images/icon.png')
-   img.save('build/appicon.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
-   ```
-3. Copier dans `build/windows/icon.ico`
-4. Rebuilder avec `wails build`
-
----
-
-## Windows
-
-Le répertoire `windows/` contient les fichiers utilisés lors du build avec `wails build` :
-
-- **`icon.ico`** — Icône embarquée dans l'exécutable
-- **`info.json`** — Métadonnées (nom, version, auteur) visibles dans les propriétés du fichier
-- **`wails.exe.manifest`** — Manifeste UAC de l'application
-- **`installer/`** — Scripts NSIS pour la création d'un installateur
-
-## macOS *(non supporté officiellement)*
-
-Le répertoire `darwin/` contient les fichiers plist pour les builds macOS éventuels.
-
----
-
-## Build production
+Depuis la racine, installez les outils et dépendances selon
+[docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md), puis exécutez :
 
 ```bash
-# Depuis la racine du projet
-wails build
-
-# Binaire produit :
-# build/bin/NetTools.exe
+npm run build
 ```
+
+La sortie Windows attendue est `build/bin/NetTools.exe`. Une compilation par
+`go build` seule sert à vérifier le code, mais ne valide pas tout le packaging
+Wails : propriétés du fichier, icône et comportement WebView2 doivent être
+contrôlés séparément sur Windows.
+
+Les modèles NSIS sont présents, sans constituer une promesse de publication
+d'un installateur. N'installez NSIS que si vous préparez effectivement ce format.
+
+## Icônes
+
+Les sources visuelles du projet se trouvent dans `frontend/src/assets/images/`.
+Le fichier ICO suivi est `build/windows/icon.ico`. Si vous modifiez les visuels,
+préservez les droits de leurs créateurs, vérifiez les différentes tailles
+Windows et contrôlez les fichiers générés par Wails avant de committer.
+Les chemins ou sorties non suivis éventuellement créés par une CLI ne doivent
+pas être présentés comme des sources déjà fournies dans le dépôt.
+
+## Préparer une distribution
+
+Joignez les fichiers légaux et les attributions des composants réellement
+embarqués. Suivez [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) et les
+[conditions de publication](../docs/OPEN_SOURCE_AUDIT.md). Une compilation ne
+publie ni n'approuve une release.
