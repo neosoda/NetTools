@@ -218,3 +218,48 @@ HTTP 403 « Resource not accessible by integration ». Les métadonnées externe
 restent inchangées ; les valeurs proposées sont dans `GITHUB_PRESENTATION.md`.
 La PR reste en brouillon, sans fusion ni release ; les réserves de publication
 et de rotation Sentinel restent applicables.
+
+
+## Intégration et mises à jour Dependabot autorisées
+
+Le propriétaire a ensuite demandé explicitement de pousser et fusionner les
+PR validées. La PR #23 est fusionnée à `master`, suivie de la PR #21 réconciliée
+sans rétrogradation : ses mises à jour étaient déjà couvertes par des versions
+supérieures. Les mentions de brouillon ci-dessus décrivent l'étape de revue,
+pas une interdiction permanente de fusion.
+
+Cette intégration reprend également les commits des PR Dependabot #24 à #38.
+Les conflits de manifests/verrouillages sont résolus sans supprimer les mises
+à jour précédentes. Wails CLI et module sont alignés sur 2.17.0 ; Vite 8 exige
+le plugin React 6, ajouté comme correction de compatibilité. Les cibles
+Chrome/Edge 107, Firefox 104 et Safari 16 de Vite 7 sont conservées explicitement.
+Les icônes Lucide restent validées par TypeScript ; aucun changement de logique
+métier n'est introduit.
+
+L'inventaire actualisé contient 230 entrées npm verrouillées et 53 modules Go
+explicitement requis. Les textes MIT des bindings Rolldown sont conservés et
+le collecteur inclut aussi `THIRD-PARTY-LICENSE`. Les nouveaux modules Go
+`go-toast/v2` et `mimetype` apportent des licences compatibles avec une
+distribution respectant leurs conditions (MIT retenue pour le dual-license
+`Unlicense OR MIT`).
+
+Les tests backend/façade, TypeScript, build frontend, go vet Linux/Windows,
+compilation Windows et contrôles de notices sont exécutés sur l'arbre intégré.
+`npm audit` ne remonte aucune vulnérabilité. `govulncheck` ne détecte aucun
+symbole ou paquet importé vulnérable ; seul l'avis OpenPGP non importé reste au
+niveau module. Les sommes Go et les actions épinglées restent vérifiées.
+La CI GitHub est désormais enregistrée et une exécution manuelle est lancée ;
+son attente côté GitHub ne doit pas être présentée comme une réussite.
+
+Aucune release binaire n'est créée par ces fusions. Les obligations de
+redistribution, la rotation Sentinel avant nouvelle signature et la validation
+fonctionnelle sur Windows et matériels réels restent distinctes de cette
+intégration de code.
+
+Le packaging Wails Windows est également exécuté avec la CLI 2.17.0, frontend
+précompilé et sans synchronisation automatique de go.mod. Il régénère les
+fichiers officiels du runtime (ajouts des API de notifications, non utilisées
+par le métier) ; ces fichiers sont conservés et le frontend est reconstruit
+avant une seconde compilation du package Windows. Les instructions cloud
+réutilisables sont alignées sur la CLI 2.17.0. Cela ne remplace pas un essai
+fonctionnel sur un poste Windows.

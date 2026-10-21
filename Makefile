@@ -1,7 +1,7 @@
 .PHONY: dev build build-windows test test-app test-cover fmt lint vet vet-desktop clean install-tools frontend-deps frontend-build frontend-lint docs docs-pdf docs-check ci
 
 WAILS ?= wails
-WAILS_VERSION := v2.11.0
+WAILS_VERSION := v2.17.0
 
 install-tools:
 	go install github.com/wailsapp/wails/v2/cmd/wails@$(WAILS_VERSION)

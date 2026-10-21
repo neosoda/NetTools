@@ -12,7 +12,7 @@ L’[architecture](docs/ARCHITECTURE.md) décrit les responsabilités des module
 ## Installer et vérifier
 
 Prérequis : Git, Go **1.26.10** (toolchain de `go.mod`), Node.js **22.22+**
-(Node 24 convient), npm, Wails **2.11.0**, Windows 10/11 x64 et WebView2.
+(Node 24 convient), npm, Wails **2.17.0**, Windows 10/11 x64 et WebView2.
 Installez Go depuis sa distribution officielle ; certains systèmes proposent
 une commande `go` sans rapport avec le langage Go. Vérifiez `go version`.
 
@@ -20,7 +20,7 @@ une commande `go` sans rapport avec le langage Go. Vérifiez `go version`.
 git clone https://github.com/neosoda/NetTools.git
 cd NetTools
 go mod download
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
 cd frontend
 npm ci --legacy-peer-deps
 npm exec -- tsc --noEmit

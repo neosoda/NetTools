@@ -6,7 +6,7 @@
 | --- | --- |
 | Go | Toolchain 1.26.10, directive minimale 1.26 dans `go.mod` |
 | Node.js | 22.22+ ; Node 24 utilisé dans la CI |
-| Wails | CLI et module 2.11.0 |
+| Wails | CLI et module 2.17.0 |
 | Produit Windows | Windows 10/11 x64, WebView2 Runtime |
 | Compilation Linux facultative | Compilateur C, pkg-config, GTK3, WebKitGTK 4.1 et session graphique |
 
@@ -21,7 +21,7 @@ dans les instructions de démarrage de cet environnement.
 git clone https://github.com/neosoda/NetTools.git
 cd NetTools
 go mod download
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
 npm ci --prefix frontend --legacy-peer-deps
 ```
 
