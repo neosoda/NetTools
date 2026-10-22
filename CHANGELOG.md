@@ -25,6 +25,21 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 Cette section décrit des modifications en préparation, sans annoncer une nouvelle release ni modifier les conditions des anciennes versions.
 
+## [1.7.0] - 2026-10-22
+
+### Ajouts
+- **Suivi en temps réel des playbooks** : barre de progression avec pourcentage réel, compteurs (traités, réussites, échecs, annulations, restants), affichage en direct de l'équipement (hostname, IP), de l'étape et de la commande SSH active.
+- **Terminal en direct** : sortie de commandes en continu avec défilement automatique, pause intelligente en cas de consultation des messages précédents et bouton de reprise.
+- **Récapitulatif détaillé d'exécution** : affichage accordéon par équipement avec durées, détail des étapes exécutées, codes retour et messages d'erreur.
+- **Organisation de l'inventaire par groupes** : création, renommage, suppression de groupes personnalisés (sites, bâtiments, etc.), maintien automatique du groupe « Non classés », badges de comptage.
+- **Sélection hiérarchique par groupes** : sélection/désélection globale et par groupe, support des états indéterminés (sélection partielle), action en lot « Assigner au groupe… », intégration du sélecteur hiérarchique dans les Playbooks, Sauvegardes et Audits.
+- **Interruption des opérations longues** : bouton d'arrêt rouge visible en continu pendant les playbooks, sauvegardes et scans, avec transitions claires (« Arrêt demandé… », « Annulé par l'utilisateur »).
+- **Contrôle d'exécution Go** : gestion thread-safe des annulations via `context.Context` (`CancelPlaybook`, `CancelBackup`, `CancelScan`, `StopAllTasks`), fermeture propre des sessions SSH, préservation des résultats partiels et absence de rollback destructif.
+
+### Sécurité et données
+- Persistance SQLite intégrale des groupes et compatibilité ascendante avec les imports/exports JSON existants.
+- Les identifiants sensibles et secrets SSH/SNMP restent protégés via DPAPI et ne sont jamais exposés dans les événements d'avancement ni les logs.
+
 ## [1.6.0] - 2026-10-16
 
 ### Ajouts

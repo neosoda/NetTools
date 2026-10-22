@@ -14,7 +14,7 @@
   "info": {
     "companyName": "neosoda",
     "productName": "NetTools",
-    "productVersion": "1.6.0",
+    "productVersion": "1.7.0",
     "copyright": "Copyright 2026 neosoda",
     "comments": "Découverte SNMP, inventaire, sauvegarde SSH et audit réseau — code original sous Apache 2.0"
   },
