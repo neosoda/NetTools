@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useLocation } from 'react-router'
-import { AlertTriangle, Archive, Play, Eye, Terminal, RefreshCw, Send, ShieldCheck, Clock } from 'lucide-react'
+import { AlertTriangle, Archive, Play, Eye, Terminal, RefreshCw, Send, ShieldCheck, Clock, Square } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Select from '../components/Select'
@@ -60,6 +60,8 @@ export default function BackupPage() {
 
   // Completion summary
   const [backupSummary, setBackupSummary] = useState<any>(null)
+  const [isStopping, setIsStopping] = useState(false)
+  const [isCancelled, setIsCancelled] = useState(false)
 
   // Events
   useEffect(() => {
@@ -72,9 +74,28 @@ export default function BackupPage() {
   useEffect(() => {
     const unsub = EventsOn('backup:complete', (data: any) => {
       setBackupSummary(data)
+      setIsStopping(false)
     })
     return () => unsub()
   }, [])
+
+  useEffect(() => {
+    const unsub = EventsOn('backup:stopped', () => {
+      setIsStopping(false)
+      setIsCancelled(true)
+    })
+    return () => unsub()
+  }, [])
+
+  const handleStopBackup = async () => {
+    setIsStopping(true)
+    try {
+      const m = await getBackend()
+      m.CancelBackup()
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   useEffect(() => {
     const unsub = EventsOn('terminal:output', (data: any) => {
@@ -91,6 +112,9 @@ export default function BackupPage() {
     mutationFn: async () => {
       const m = await getBackend()
       setBackupProgress({})
+      setBackupSummary(null)
+      setIsStopping(false)
+      setIsCancelled(false)
       if (selection.source === 'manual') {
         return m.RunBackup({
           device_ids: [],
@@ -228,12 +252,30 @@ export default function BackupPage() {
               manualDescription="Les adresses saisies seront sauvegardées sans modifier l’inventaire." />
           </div>
 
-          <div className="relative z-10 flex pt-2">
-            <Button variant="primary" loading={backupMutation.isPending} className="shadow-blue-500/25 px-8"
-              disabled={!canLaunch} onClick={() => backupMutation.mutate()}>
-              <Play className="w-4 h-4" /> Démarrer les Backups
-            </Button>
+          <div className="relative z-10 flex items-center gap-3 pt-2">
+            {!backupMutation.isPending ? (
+              <Button variant="primary" className="shadow-blue-500/25 px-8"
+                disabled={!canLaunch} onClick={() => backupMutation.mutate()}>
+                <Play className="w-4 h-4" /> Démarrer les Backups
+              </Button>
+            ) : (
+              <Button
+                variant="danger"
+                disabled={isStopping}
+                onClick={handleStopBackup}
+                className="shadow-red-500/30 px-6">
+                <Square className="w-4 h-4 fill-current" />
+                {isStopping ? 'Arrêt demandé…' : 'Arrêter'}
+              </Button>
+            )}
           </div>
+
+          {isCancelled && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Opération annulée par l'utilisateur. Les sauvegardes déjà effectuées sont conservées.</span>
+            </div>
+          )}
 
           {/* Global progress bar */}
           {backupMutation.isPending && Object.keys(backupProgress).length > 0 && (() => {

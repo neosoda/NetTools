@@ -3,6 +3,7 @@ package playbook
 import (
 	"bytes"
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -133,12 +134,24 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 
 	sess, err := ssh.Connect(ctx, params)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			result.Status = "cancelled"
+			result.TotalMs = time.Since(start).Milliseconds()
+			saveExecution(result, device.ID, "")
+			return result, ctx.Err()
+		}
 		return result, fmt.Errorf("connect: %w", err)
 	}
 	defer sess.Close()
 
 	shell, err := sess.OpenInteractiveShell(ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			result.Status = "cancelled"
+			result.TotalMs = time.Since(start).Milliseconds()
+			saveExecution(result, device.ID, "")
+			return result, ctx.Err()
+		}
 		return result, fmt.Errorf("open interactive shell: %w", err)
 	}
 	defer shell.Close()
@@ -146,6 +159,9 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 	for i, step := range pb.Steps {
 		select {
 		case <-ctx.Done():
+			result.Status = "cancelled"
+			result.TotalMs = time.Since(start).Milliseconds()
+			saveExecution(result, device.ID, "")
 			return result, ctx.Err()
 		default:
 		}
@@ -168,6 +184,18 @@ func Run(ctx context.Context, pb *PlaybookDef, device models.Device, username, p
 		sr.Output = output
 
 		if cmdErr != nil {
+			if errors.Is(cmdErr, context.Canceled) || ctx.Err() != nil {
+				sr.Error = "Annulé par l'utilisateur"
+				sr.Passed = false
+				result.Steps = append(result.Steps, sr)
+				result.Status = "cancelled"
+				result.TotalMs = time.Since(start).Milliseconds()
+				saveExecution(result, device.ID, "")
+				evt := base
+				evt.Done, evt.Output, evt.Passed, evt.Error = true, output, false, sr.Error
+				emit(evt)
+				return result, ctx.Err()
+			}
 			sr.Error = cmdErr.Error()
 			sr.Passed = false
 			result.Steps = append(result.Steps, sr)
@@ -323,6 +351,12 @@ func runWithNetmiko(ctx context.Context, start time.Time, pb *PlaybookDef, devic
 	cmd.Stdin = bytes.NewReader(input)
 	raw, err := cmd.CombinedOutput()
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+			result.Status = "cancelled"
+			result.TotalMs = time.Since(start).Milliseconds()
+			saveExecution(result, device.ID, "")
+			return result, ctx.Err()
+		}
 		return result, fmt.Errorf("netmiko runner failed: %w: %s", err, strings.TrimSpace(string(raw)))
 	}
 

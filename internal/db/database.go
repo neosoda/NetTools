@@ -27,7 +27,7 @@ func Init(appDataDir string) error {
 	}
 	db.Exec("PRAGMA foreign_keys = ON")
 	if err := db.AutoMigrate(
-		&models.Device{}, &models.Credential{}, &models.Backup{}, &models.ScheduledJob{},
+		&models.Device{}, &models.DeviceGroup{}, &models.Credential{}, &models.Backup{}, &models.ScheduledJob{},
 		&models.AuditLog{}, &models.AuditRule{}, &models.AuditResult{}, &models.Playbook{},
 		&models.PlaybookExecution{}, &models.SchemaMigration{},
 	); err != nil {

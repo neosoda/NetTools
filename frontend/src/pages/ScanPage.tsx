@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router'
-import { Radio, Play, Square, FileSpreadsheet, Network, Layers, Cpu, Upload, Search } from 'lucide-react'
+import { Radio, Play, Square, FileSpreadsheet, Network, Layers, Cpu, Upload, Search, AlertTriangle } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -99,6 +99,8 @@ export default function ScanPage() {
   const [workers, setWorkers] = useState('10')
   const [timeout, setTimeoutVal] = useState('3')
   const [scanning, setScanning] = useState(false)
+  const [isStopping, setIsStopping] = useState(false)
+  const [isCancelled, setIsCancelled] = useState(false)
   const [progress, setProgress] = useState<{ ip: string; done: number; total: number; percent: number } | null>(null)
   const [results, setResults] = useState<Device[]>([])
   const [scanSummary, setScanSummary] = useState<ScanSummary | null>(null)
@@ -198,10 +200,9 @@ export default function ScanPage() {
   }
 
   const handleStop = async () => {
+    setIsStopping(true)
     const m = await getBackend()
-    await callBackend(() => m.StopAllTasks())
-    setScanning(false)
-    setProgress(null)
+    await callBackend(() => m.CancelScan())
   }
 
   const handleTest = async () => {
@@ -325,8 +326,8 @@ export default function ScanPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               {scanning && (
-                <Button variant="danger" onClick={handleStop}>
-                  <Square className="w-4 h-4" /> Arrêter
+                <Button variant="danger" disabled={isStopping} onClick={handleStop}>
+                  <Square className="w-4 h-4 fill-current" /> {isStopping ? 'Arrêt demandé…' : 'Arrêter'}
                 </Button>
               )}
               <Button variant="primary" loading={scanning} onClick={handleScan} className="px-8 shadow-blue-500/25">
@@ -335,6 +336,13 @@ export default function ScanPage() {
             </div>
           </div>
         </div>
+
+        {isCancelled && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Scan interrompu par l'utilisateur. Les équipements découverts jusqu'à l'arrêt sont conservés ci-dessous.</span>
+          </div>
+        )}
 
         {/* Progress */}
         {scanning && progress && (

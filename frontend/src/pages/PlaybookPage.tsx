@@ -1,13 +1,20 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Play, Trash2, FileCode, BookOpen, ChevronDown, ChevronRight, Copy, Terminal, Code } from 'lucide-react'
+import { useLocation } from 'react-router'
+import {
+  Plus, Play, Trash2, FileCode, BookOpen, ChevronDown, ChevronRight, Copy, Terminal, Code,
+  Square, AlertTriangle, CheckCircle2, XCircle, Clock, CheckSquare, Folder, RotateCcw,
+  Maximize2, ArrowDown
+} from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
+import StatusBadge from '../components/StatusBadge'
 import { getBackend } from '../lib/backend'
 import { useGlobalCredential } from '../context/CredentialContext'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { DeviceGroup } from '../types/models'
 
 // ── Exemples de playbooks prêts à l'emploi ──────────────────────────────────
 const PLAYBOOK_TEMPLATES = [
@@ -118,7 +125,7 @@ const GUIDE_SECTIONS = [
 Le playbook est défini en YAML, un format texte simple et lisible.`,
   },
   {
-    title: 'Structure d\'un playbook',
+    title: "Structure d'un playbook",
     content: `Un playbook YAML contient :
 
 name: Nom du playbook (obligatoire)
@@ -160,7 +167,6 @@ ${steps}
 `
 }
 
-// Extract commands from YAML content (for switching to simple mode)
 function yamlToCommands(yamlContent: string): string {
   const lines = yamlContent.split('\n')
   const commands: string[] = []
@@ -171,6 +177,51 @@ function yamlToCommands(yamlContent: string): string {
   return commands.join('\n')
 }
 
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+function IndeterminateCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  disabled,
+  title,
+  'aria-label': ariaLabel,
+  className = '',
+}: {
+  checked: boolean
+  indeterminate?: boolean
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  disabled?: boolean
+  title?: string
+  'aria-label'?: string
+  className?: string
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = !checked && Boolean(indeterminate)
+    }
+  }, [checked, indeterminate])
+
+  return (
+    <input
+      type="checkbox"
+      ref={ref}
+      checked={checked}
+      disabled={disabled}
+      title={title}
+      aria-label={ariaLabel}
+      onChange={onChange}
+      className={`h-4 w-4 rounded border-slate-700 bg-slate-900 accent-blue-500 cursor-pointer ${className}`}
+    />
+  )
+}
+
 type TermLine =
   | { type: 'device'; label: string; ip: string; index: number; total: number }
   | { type: 'step_start'; name: string; command: string; index: number; total: number }
@@ -178,9 +229,24 @@ type TermLine =
   | { type: 'step_ok'; name: string }
   | { type: 'step_err'; name: string; error: string }
   | { type: 'device_done'; label: string; status: string }
+  | { type: 'system'; message: string }
+
+interface DeviceProgressState {
+  id: string
+  ip: string
+  label: string
+  status: 'pending' | 'running' | 'success' | 'failed' | 'cancelled'
+  durationMs?: number
+  stepIndex?: number
+  totalSteps?: number
+  currentStepName?: string
+  currentCommand?: string
+  error?: string
+}
 
 export default function PlaybookPage() {
   const qc = useQueryClient()
+  const location = useLocation()
   const { globalCredId } = useGlobalCredential()
   const [showModal, setShowModal] = useState(false)
   const [editPb, setEditPb] = useState<any>(null)
@@ -191,57 +257,36 @@ export default function PlaybookPage() {
   const [activeTab, setActiveTab] = useState<'playbooks' | 'guide'>('playbooks')
   const [openSection, setOpenSection] = useState<number | null>(0)
   const [copied, setCopied] = useState<string | null>(null)
+  const [runViewTab, setRunViewTab] = useState<'terminal' | 'recap'>('terminal')
+  const [deviceSearch, setDeviceSearch] = useState('')
+  const [targetCollapsedGroups, setTargetCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [expandedRecapDevice, setExpandedRecapDevice] = useState<string | null>(null)
+
+  // Real-time execution tracking
+  const [isStopping, setIsStopping] = useState(false)
+  const [isCancelled, setIsCancelled] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [currentDevice, setCurrentDevice] = useState<{ id: string; ip: string; label: string; index: number; total: number } | null>(null)
+  const [currentStep, setCurrentStep] = useState<{ name: string; command: string; index: number; total: number } | null>(null)
+  const [deviceStatusMap, setDeviceStatusMap] = useState<Record<string, DeviceProgressState>>({})
+  const [userScrolledUp, setUserScrolledUp] = useState(false)
+  const [progressStats, setProgressStats] = useState({
+    total: 0,
+    processed: 0,
+    success_count: 0,
+    failed_count: 0,
+    cancelled_count: 0,
+    remaining_count: 0,
+    percent: 0,
+  })
+
   const termRef = useRef<HTMLDivElement>(null)
 
   // Simple vs Advanced mode for the editor
   const [editorMode, setEditorMode] = useState<'simple' | 'advanced'>('simple')
   const [simpleCommands, setSimpleCommands] = useState('')
 
-  // Real-time playbook step events
-  useEffect(() => {
-    const handler = (data: any) => {
-      if (data.type === 'device_start') {
-        setTermLines(prev => [...prev, {
-          type: 'device', label: data.device_label, ip: data.device_ip, index: 0, total: 0,
-        }])
-        return
-      }
-      if (!data.done) {
-        // Step starting
-        setTermLines(prev => [...prev, {
-          type: 'step_start', name: data.step_name, command: data.command,
-          index: data.step_index + 1, total: data.total_steps,
-        }])
-      } else {
-        // Step done: output then status
-        if (data.output?.trim()) {
-          setTermLines(prev => [...prev, { type: 'output', text: data.output.trim() }])
-        }
-        if (data.passed) {
-          setTermLines(prev => [...prev, { type: 'step_ok', name: data.step_name }])
-        } else {
-          setTermLines(prev => [...prev, { type: 'step_err', name: data.step_name, error: data.error || 'Échec' }])
-        }
-      }
-    }
-    EventsOn('playbook:step', handler)
-    return () => { EventsOff('playbook:step') }
-  }, [])
-
-  // Listen for per-device completion events
-  useEffect(() => {
-    const handler = (data: any) => {
-      setTermLines(prev => [...prev, { type: 'device_done', label: data.device_label || data.device_ip, status: data.status }])
-    }
-    EventsOn('playbook:progress', handler)
-    return () => { EventsOff('playbook:progress') }
-  }, [])
-
-  // Auto-scroll terminal
-  useEffect(() => {
-    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight
-  }, [termLines])
-
+  // Queries
   const { data: playbooks = [] } = useQuery({
     queryKey: ['playbooks'],
     queryFn: async () => { const m = await getBackend(); return m.GetPlaybooks() },
@@ -250,10 +295,184 @@ export default function PlaybookPage() {
     queryKey: ['devices'],
     queryFn: async () => { const m = await getBackend(); return m.GetDevices() },
   })
+  const { data: groups = [] } = useQuery({
+    queryKey: ['device-groups'],
+    queryFn: async () => { const m = await getBackend(); return m.GetDeviceGroups() },
+  })
 
+  // Handle incoming selection from navigation state (e.g. from InventoryPage)
+  useEffect(() => {
+    if (location.state?.deviceIds && Array.isArray(location.state.deviceIds)) {
+      setSelectedDevices(location.state.deviceIds)
+    }
+  }, [location.state])
+
+  // Timer for elapsed execution time
+  useEffect(() => {
+    let interval: any = null
+    if (runMutation.isPending) {
+      interval = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1)
+      }, 1000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [])
+
+  // Auto-scroll terminal unless user manually scrolled up
+  useEffect(() => {
+    if (termRef.current && !userScrolledUp) {
+      termRef.current.scrollTop = termRef.current.scrollHeight
+    }
+  }, [termLines, userScrolledUp])
+
+  const handleTerminalScroll = () => {
+    if (!termRef.current) return
+    const { scrollTop, clientHeight, scrollHeight } = termRef.current
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 30
+    setUserScrolledUp(!isAtBottom)
+  }
+
+  const resumeAutoScroll = () => {
+    setUserScrolledUp(false)
+    if (termRef.current) {
+      termRef.current.scrollTop = termRef.current.scrollHeight
+    }
+  }
+
+  // Wails Event Listeners
+  useEffect(() => {
+    const stepHandler = (data: any) => {
+      if (data.type === 'device_start') {
+        const label = data.device_label || data.device_ip
+        setCurrentDevice({
+          id: data.device_id,
+          ip: data.device_ip,
+          label: label,
+          index: data.device_index || 0,
+          total: data.total_devices || 0,
+        })
+        setCurrentStep(null)
+        setDeviceStatusMap(prev => ({
+          ...prev,
+          [data.device_id]: {
+            ...prev[data.device_id],
+            id: data.device_id,
+            ip: data.device_ip,
+            label: label,
+            status: 'running',
+          },
+        }))
+        setTermLines(prev => [
+          ...prev,
+          {
+            type: 'device',
+            label: label,
+            ip: data.device_ip,
+            index: data.device_index || 0,
+            total: data.total_devices || 0,
+          },
+        ])
+        return
+      }
+
+      if (data.type === 'step_update') {
+        if (!data.done) {
+          // Step starting
+          setCurrentStep({
+            name: data.step_name,
+            command: data.command,
+            index: (data.step_index ?? 0) + 1,
+            total: data.total_steps ?? 0,
+          })
+          setTermLines(prev => [
+            ...prev,
+            {
+              type: 'step_start',
+              name: data.step_name,
+              command: data.command,
+              index: (data.step_index ?? 0) + 1,
+              total: data.total_steps ?? 0,
+            },
+          ])
+        } else {
+          // Step finished
+          if (data.output?.trim()) {
+            setTermLines(prev => [...prev, { type: 'output', text: data.output.trim() }])
+          }
+          if (data.passed) {
+            setTermLines(prev => [...prev, { type: 'step_ok', name: data.step_name }])
+          } else {
+            setTermLines(prev => [
+              ...prev,
+              { type: 'step_err', name: data.step_name, error: data.error || 'Échec' },
+            ])
+          }
+        }
+      }
+    }
+
+    const progressHandler = (data: any) => {
+      setProgressStats({
+        total: data.total ?? 0,
+        processed: data.processed ?? 0,
+        success_count: data.success_count ?? 0,
+        failed_count: data.failed_count ?? 0,
+        cancelled_count: data.cancelled_count ?? 0,
+        remaining_count: data.remaining_count ?? 0,
+        percent: data.percent ?? 0,
+      })
+
+      if (data.device_id) {
+        setDeviceStatusMap(prev => ({
+          ...prev,
+          [data.device_id]: {
+            ...prev[data.device_id],
+            id: data.device_id,
+            ip: data.device_ip,
+            label: data.device_label || data.device_ip,
+            status: data.status,
+          },
+        }))
+
+        setTermLines(prev => [
+          ...prev,
+          {
+            type: 'device_done',
+            label: data.device_label || data.device_ip,
+            status: data.status,
+          },
+        ])
+      }
+    }
+
+    const stopHandler = (data: any) => {
+      setIsStopping(false)
+      setIsCancelled(true)
+      setTermLines(prev => [
+        ...prev,
+        {
+          type: 'system',
+          message: data.message || 'Exécution interrompue par l’utilisateur',
+        },
+      ])
+    }
+
+    EventsOn('playbook:step', stepHandler)
+    EventsOn('playbook:progress', progressHandler)
+    EventsOn('playbook:stopped', stopHandler)
+
+    return () => {
+      EventsOff('playbook:step')
+      EventsOff('playbook:progress')
+      EventsOff('playbook:stopped')
+    }
+  }, [])
+
+  // Mutations
   const saveMutation = useMutation({
     mutationFn: async (pb: any) => {
-      // In simple mode, convert commands to YAML before saving
       let content = pb.content
       if (editorMode === 'simple' && simpleCommands.trim()) {
         content = commandsToYaml(pb.name, pb.description, simpleCommands)
@@ -261,21 +480,81 @@ export default function PlaybookPage() {
       const m = await getBackend()
       return m.SavePlaybook({ ...pb, content })
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['playbooks'] }); setShowModal(false) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['playbooks'] })
+      setShowModal(false)
+    },
   })
+
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => { const m = await getBackend(); return m.DeletePlaybook(id) },
+    mutationFn: async (id: string) => {
+      const m = await getBackend()
+      return m.DeletePlaybook(id)
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['playbooks'] }),
   })
+
   const runMutation = useMutation({
     mutationFn: async () => {
       setTermLines([])
       setResults([])
+      setIsStopping(false)
+      setIsCancelled(false)
+      setElapsedSeconds(0)
+      setCurrentDevice(null)
+      setCurrentStep(null)
+      setUserScrolledUp(false)
+      setRunViewTab('terminal')
+
+      // Initialize device status map
+      const initialMap: Record<string, DeviceProgressState> = {}
+      for (const id of selectedDevices) {
+        const d = (devices as any[]).find(x => x.id === id)
+        initialMap[id] = {
+          id,
+          ip: d?.ip || id,
+          label: d?.hostname || d?.ip || id,
+          status: 'pending',
+        }
+      }
+      setDeviceStatusMap(initialMap)
+      setProgressStats({
+        total: selectedDevices.length,
+        processed: 0,
+        success_count: 0,
+        failed_count: 0,
+        cancelled_count: 0,
+        remaining_count: selectedDevices.length,
+        percent: 0,
+      })
+
       const m = await getBackend()
-      return m.RunPlaybook({ playbook_id: runModal.id, device_ids: selectedDevices, credential_id: globalCredId })
+      return m.RunPlaybook({
+        playbook_id: runModal.id,
+        device_ids: selectedDevices,
+        credential_id: globalCredId,
+      })
     },
-    onSuccess: (data: any) => setResults(data || []),
+    onSuccess: (data: any) => {
+      setResults(data || [])
+      setIsStopping(false)
+      setCurrentDevice(null)
+      setCurrentStep(null)
+    },
+    onError: () => {
+      setIsStopping(false)
+    },
   })
+
+  const handleStopExecution = async () => {
+    setIsStopping(true)
+    try {
+      const m = await getBackend()
+      m.CancelPlaybook()
+    } catch (e) {
+      console.error('Failed to cancel playbook:', e)
+    }
+  }
 
   const handleCopyTemplate = (template: typeof PLAYBOOK_TEMPLATES[0]) => {
     setCopied(template.name)
@@ -302,16 +581,82 @@ export default function PlaybookPage() {
   const openEdit = (pb: any) => {
     const cmds = yamlToCommands(pb.content || '')
     setSimpleCommands(cmds)
-    // Default to simple mode if it looks like a simple playbook (all on_error: continue, no expect)
     const hasExpect = (pb.content || '').includes('expect:')
     setEditorMode(hasExpect ? 'advanced' : 'simple')
     setEditPb(pb)
     setShowModal(true)
   }
 
+  const openRunModal = (pb: any) => {
+    setRunModal(pb)
+    setResults([])
+    setTermLines([])
+    setIsStopping(false)
+    setIsCancelled(false)
+    setElapsedSeconds(0)
+    setRunViewTab('terminal')
+  }
+
+  // Grouped devices for selection inside Run Modal
+  const groupedTargetSections = useMemo(() => {
+    const query = deviceSearch.trim().toLowerCase()
+    const allDevs = devices as any[]
+    const matching = query
+      ? allDevs.filter(d => [d.ip, d.hostname, d.vendor, d.model, d.group_name].some(f => f?.toLowerCase().includes(query)))
+      : allDevs
+
+    const map = new Map<string, { id: string; name: string; devices: any[] }>()
+    for (const g of (groups as DeviceGroup[])) {
+      map.set(g.id, { id: g.id, name: g.name, devices: [] })
+    }
+    map.set('__unassigned__', { id: '__unassigned__', name: 'Non classés', devices: [] })
+
+    for (const dev of matching) {
+      const gid = dev.group_id && map.has(dev.group_id) ? dev.group_id : '__unassigned__'
+      map.get(gid)!.devices.push(dev)
+    }
+
+    const res: { id: string; name: string; devices: any[] }[] = []
+    for (const g of (groups as DeviceGroup[])) {
+      const sec = map.get(g.id)!
+      if (sec.devices.length > 0 || !query) res.push(sec)
+    }
+    const unassigned = map.get('__unassigned__')!
+    if (unassigned.devices.length > 0 || !query) res.push(unassigned)
+
+    return res
+  }, [devices, groups, deviceSearch])
+
+  const toggleTargetDevice = (id: string) => {
+    setSelectedDevices(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  const toggleTargetGroup = (groupDevices: any[]) => {
+    const gIds = groupDevices.map(d => d.id)
+    const allSelected = gIds.length > 0 && gIds.every(id => selectedDevices.includes(id))
+    if (allSelected) {
+      setSelectedDevices(prev => prev.filter(id => !gIds.includes(id)))
+    } else {
+      setSelectedDevices(prev => [...new Set([...prev, ...gIds])])
+    }
+  }
+
+  const selectAllTargets = () => {
+    setSelectedDevices((devices as any[]).map(d => d.id))
+  }
+
+  const deselectAllTargets = () => {
+    setSelectedDevices([])
+  }
+
+  const isExecutionActive = runMutation.isPending
+
   return (
     <div className="flex flex-col h-full">
-      <PageHeader title="Playbooks SSH"
+      <PageHeader
+        title="Playbooks SSH"
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant={activeTab === 'playbooks' ? 'primary' : 'secondary'} onClick={() => setActiveTab('playbooks')}>
@@ -342,7 +687,7 @@ export default function PlaybookPage() {
               {(playbooks as any[]).map((pb: any) => (
                 <div key={pb.id} className="bg-slate-900/40 backdrop-blur-md border border-white/[0.05] rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:bg-slate-900/60 transition-all duration-300">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-indigo-500/10 transition-colors" />
-                  
+
                   <div className="relative z-10">
                     <div className="flex items-start gap-3 mb-4">
                       <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0 text-indigo-400 group-hover:scale-110 group-hover:bg-indigo-500/20 transition-all">
@@ -353,14 +698,14 @@ export default function PlaybookPage() {
                         {pb.description && <p className="text-xs text-slate-500 truncate mt-0.5" title={pb.description}>{pb.description}</p>}
                       </div>
                     </div>
-                    
+
                     <pre className="text-[10px] text-slate-400 bg-slate-950/60 border border-slate-800/60 p-3 rounded-xl overflow-hidden max-h-28 font-mono shadow-inner custom-scrollbar mb-5 relative">
                       <div className="absolute top-0 right-0 px-2 py-0.5 bg-slate-800/80 rounded-bl-lg text-[9px] uppercase tracking-wider font-bold text-slate-500">YAML</div>
                       {pb.content}
                     </pre>
-                    
+
                     <div className="flex justify-between items-center pt-4 border-t border-white/[0.04]">
-                      <Button size="sm" variant="primary" onClick={() => { setRunModal(pb); setResults([]) }} className="shadow-indigo-500/20 px-4">
+                      <Button size="sm" variant="primary" onClick={() => openRunModal(pb)} className="shadow-indigo-500/20 px-4">
                         <Play className="w-3.5 h-3.5" /> Exécuter
                       </Button>
                       <div className="flex gap-1">
@@ -427,7 +772,6 @@ export default function PlaybookPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Exemple YAML complet */}
               <div className="lg:col-span-1 bg-slate-900/40 backdrop-blur-md border border-white/[0.05] rounded-2xl p-6 shadow-lg h-max">
                 <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2 mb-4">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
@@ -436,7 +780,7 @@ export default function PlaybookPage() {
                 <pre className="text-[11px] text-slate-400 bg-slate-950/80 p-4 rounded-xl font-mono leading-relaxed border border-white/[0.02] custom-scrollbar overflow-x-auto shadow-inner">{`name: Mon playbook
 description: Description de ce que fait ce playbook
 timeout: 120s        # Délai max total
-executor: netmiko    # Exécution CLI stateful (recommandé pour config)
+executor: netmiko    # Exécution CLI stateful
 netmiko_device_type: cisco_ios  # optionnel
 
 steps:
@@ -444,7 +788,7 @@ steps:
     command: show version
     on_error: abort  # Arrête si pas de connexion
 
-  - name: Création VLAN (session interactive conservée)
+  - name: Création VLAN
     commands:
       - configure terminal
       - vlan 10
@@ -469,7 +813,7 @@ steps:
                   <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Créer à partir d'un modèle</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5">
-                  {PLAYBOOK_TEMPLATES.map((t) => (
+                  {PLAYBOOK_TEMPLATES.map(t => (
                     <div key={t.name} className="bg-slate-950/30 border border-white/[0.04] rounded-xl p-5 hover:border-slate-700 transition-colors group">
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div>
@@ -562,86 +906,463 @@ steps:
         </form>
       </Modal>
 
-      {/* Run modal */}
-      <Modal open={!!runModal} onClose={() => { setRunModal(null); setTermLines([]); setResults([]) }} title={`Exécuter : ${runModal?.name}`} size="lg">
-        <div className="space-y-3">
-          {/* Device selector — hidden while running */}
-          {!runMutation.isPending && termLines.length === 0 && (
-            <>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-400">{selectedDevices.length}/{(devices as any[]).length} équipements sélectionnés</p>
-                <button onClick={() => setSelectedDevices(selectedDevices.length === (devices as any[]).length ? [] : (devices as any[]).map((d: any) => d.id))}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                  {selectedDevices.length === (devices as any[]).length ? 'Tout désélectionner' : 'Tout sélectionner'}
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(devices as any[]).map((d: any) => (
-                  <button key={d.id}
-                    onClick={() => setSelectedDevices(prev => prev.includes(d.id) ? prev.filter(x => x !== d.id) : [...prev, d.id])}
-                    className={`px-2 py-1 rounded text-xs border transition-colors ${selectedDevices.includes(d.id) ? 'bg-blue-600/20 border-blue-600 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
-                    {d.hostname || d.ip}
+      {/* Real-time Execution Modal */}
+      <Modal
+        open={!!runModal}
+        onClose={() => {
+          if (!isExecutionActive) {
+            setRunModal(null)
+            setTermLines([])
+            setResults([])
+          }
+        }}
+        title={`Exécuter : ${runModal?.name}`}
+        size="lg">
+        <div className="space-y-4">
+          {/* Target Equipment Selector — only shown before launching execution */}
+          {!isExecutionActive && termLines.length === 0 && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Input
+                  placeholder="Filtrer équipements ou groupes..."
+                  value={deviceSearch}
+                  onChange={e => setDeviceSearch(e.target.value)}
+                  className="w-64 py-1.5"
+                />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={selectAllTargets}
+                    className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                    Tout sélectionner ({(devices as any[]).length})
                   </button>
-                ))}
+                  <span className="text-slate-600">|</span>
+                  <button
+                    type="button"
+                    onClick={deselectAllTargets}
+                    disabled={selectedDevices.length === 0}
+                    className="text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40">
+                    Tout désélectionner
+                  </button>
+                </div>
               </div>
-            </>
-          )}
 
-          <Button variant="primary" loading={runMutation.isPending}
-            disabled={selectedDevices.length === 0} onClick={() => runMutation.mutate()}>
-            <Play className="w-4 h-4" />
-            {runMutation.isPending ? 'Exécution en cours…' : `Exécuter (${selectedDevices.length})`}
-          </Button>
+              <div className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900/40 border border-white/[0.04] text-slate-300">
+                <span className="text-blue-400 font-bold">{selectedDevices.length}</span> équipement{selectedDevices.length > 1 ? 's' : ''} sélectionné{selectedDevices.length > 1 ? 's' : ''} sur {(devices as any[]).length}
+              </div>
 
-          {/* Terminal temps réel */}
-          {(runMutation.isPending || termLines.length > 0) && (
-            <div ref={termRef}
-              className="bg-slate-950 border border-slate-800 rounded-lg p-3 h-80 overflow-y-auto font-mono text-xs space-y-0.5">
-              {termLines.map((line, i) => {
-                if (line.type === 'device') return (
-                  <div key={i} className="text-cyan-400 mt-2 first:mt-0">
-                    ── {line.label} ({line.ip}) — device {line.index}/{line.total} ──
-                  </div>
-                )
-                if (line.type === 'step_start') return (
-                  <div key={i} className="text-slate-400 mt-1">
-                    <span className="text-slate-600">[{line.index}/{line.total}]</span>{' '}
-                    <span className="text-slate-300">{line.name}</span>
-                    {' '}<span className="text-blue-400">$ {line.command}</span>
-                  </div>
-                )
-                if (line.type === 'output') return (
-                  <pre key={i} className="text-slate-400 pl-4 whitespace-pre-wrap break-all leading-relaxed">
-                    {line.text}
-                  </pre>
-                )
-                if (line.type === 'step_ok') return (
-                  <div key={i} className="text-green-400 pl-4">✓ {line.name}</div>
-                )
-                if (line.type === 'step_err') return (
-                  <div key={i} className="text-red-400 pl-4">✗ {line.name} — {line.error}</div>
-                )
-                if (line.type === 'device_done') return (
-                  <div key={i} className={`mt-1 font-medium ${line.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                    {line.status === 'success' ? '✓' : '✗'} {line.label} terminé ({line.status})
-                  </div>
-                )
-                return null
-              })}
-              {runMutation.isPending && (
-                <div className="text-slate-500 animate-pulse">▌</div>
-              )}
+              {/* Collapsible groups of devices */}
+              <div className="max-h-60 space-y-2 overflow-y-auto rounded-xl border border-white/[0.04] bg-slate-950/40 p-2 custom-scrollbar">
+                {groupedTargetSections.map(section => {
+                  const secDevices = section.devices
+                  const secSelected = secDevices.filter(d => selectedDevices.includes(d.id))
+                  const isAllSecSelected = secDevices.length > 0 && secSelected.length === secDevices.length
+                  const isIndeterminate = secSelected.length > 0 && secSelected.length < secDevices.length
+                  const isCollapsed = Boolean(targetCollapsedGroups[section.id])
+
+                  return (
+                    <div key={section.id} className="rounded-lg border border-white/[0.04] bg-slate-900/30 overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950/60 hover:bg-slate-900/60 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setTargetCollapsedGroups(prev => ({ ...prev, [section.id]: !prev[section.id] }))}
+                            className="text-slate-400 hover:text-slate-200 p-0.5">
+                            {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                          <IndeterminateCheckbox
+                            checked={isAllSecSelected}
+                            indeterminate={isIndeterminate}
+                            onChange={() => toggleTargetGroup(secDevices)}
+                            title={`Sélectionner tout ${section.name}`}
+                            aria-label={`Sélectionner le groupe ${section.name}`}
+                          />
+                          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <Folder className="w-3.5 h-3.5 text-blue-400" />
+                            {section.name}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-medium text-slate-500 bg-slate-800/80 px-2 py-0.5 rounded-full">
+                          {secSelected.length}/{secDevices.length}
+                        </span>
+                      </div>
+
+                      {!isCollapsed && (
+                        <div className="p-1 space-y-0.5">
+                          {secDevices.map(device => {
+                            const isSelected = selectedDevices.includes(device.id)
+                            return (
+                              <label
+                                key={device.id}
+                                className={`flex cursor-pointer items-center gap-2.5 rounded px-2.5 py-1 text-xs transition-colors ${
+                                  isSelected ? 'bg-blue-500/10 text-slate-100 font-medium' : 'text-slate-400 hover:bg-white/[0.03]'
+                                }`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleTargetDevice(device.id)}
+                                  className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 accent-blue-500"
+                                />
+                                <span className="font-mono text-blue-400 text-[11px]">{device.ip}</span>
+                                <span className="min-w-0 flex-1 truncate text-slate-300">
+                                  {device.hostname || <span className="text-slate-600 italic">Sans nom</span>}
+                                </span>
+                                {device.vendor && (
+                                  <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-800/60 px-1 py-0.2 rounded">
+                                    {device.vendor}
+                                  </span>
+                                )}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Launch Button */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/[0.04]">
+                <Button onClick={() => setRunModal(null)}>Annuler</Button>
+                <Button
+                  variant="primary"
+                  disabled={selectedDevices.length === 0}
+                  onClick={() => runMutation.mutate()}>
+                  <Play className="w-4 h-4" />
+                  Lancer l'exécution ({selectedDevices.length} équipement{selectedDevices.length > 1 ? 's' : ''})
+                </Button>
+              </div>
             </div>
           )}
 
-          {/* Résumé final (après exécution complète) */}
-          {!runMutation.isPending && results.length > 0 && (
-            <div className="text-xs text-slate-500 border-t border-slate-800 pt-2">
-              {results.filter((r: any) => r.Status === 'success').length}/{results.length} équipements OK
-              {results.some((r: any) => r.Status !== 'success') && (
-                <span className="text-red-400 ml-2">
-                  — Échecs : {results.filter((r: any) => r.Status !== 'success').map((r: any) => r.DeviceIP).join(', ')}
-                </span>
+          {/* Real-time Execution Dashboard (during and after execution) */}
+          {(isExecutionActive || termLines.length > 0) && (
+            <div className="space-y-3">
+              {/* Progress Bar & Header Counters */}
+              <div className="bg-slate-900/60 border border-white/[0.06] rounded-2xl p-4 shadow-xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl font-bold font-mono text-blue-400">
+                      {progressStats.percent}%
+                    </span>
+                    <div className="text-xs text-slate-400">
+                      <span className="text-slate-200 font-bold">{progressStats.processed}</span> sur{' '}
+                      <span className="text-slate-200 font-bold">{progressStats.total}</span> traités
+                    </div>
+                  </div>
+
+                  {/* Badges Counters */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {progressStats.success_count} réussi{progressStats.success_count > 1 ? 's' : ''}
+                    </span>
+
+                    {progressStats.failed_count > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-semibold">
+                        <XCircle className="w-3.5 h-3.5" />
+                        {progressStats.failed_count} échec{progressStats.failed_count > 1 ? 's' : ''}
+                      </span>
+                    )}
+
+                    {progressStats.cancelled_count > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {progressStats.cancelled_count} annulé{progressStats.cancelled_count > 1 ? 's' : ''}
+                      </span>
+                    )}
+
+                    {progressStats.remaining_count > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-medium">
+                        <Clock className="w-3.5 h-3.5" />
+                        {progressStats.remaining_count} restant{progressStats.remaining_count > 1 ? 's' : ''}
+                      </span>
+                    )}
+
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950/60 text-slate-300 border border-white/[0.05] font-mono text-[11px]">
+                      <Clock className="w-3 h-3 text-blue-400" />
+                      {formatDuration(elapsedSeconds)}
+                    </span>
+                  </div>
+
+                  {/* Stop / Cancel Action Button */}
+                  <div>
+                    {isExecutionActive ? (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={isStopping}
+                        onClick={handleStopExecution}
+                        className="shadow-red-500/30">
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        {isStopping ? 'Arrêt demandé…' : 'Arrêter'}
+                      </Button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setTermLines([])
+                            setResults([])
+                            setIsCancelled(false)
+                          }}>
+                          <RotateCcw className="w-3.5 h-3.5" /> Nouvelle exécution
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setRunModal(null)}>
+                          Fermer
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden border border-white/[0.05]">
+                  <div
+                    className={`h-full transition-all duration-300 rounded-full ${
+                      isCancelled
+                        ? 'bg-amber-500'
+                        : progressStats.failed_count > 0
+                        ? 'bg-gradient-to-r from-blue-500 via-amber-500 to-emerald-500'
+                        : 'bg-gradient-to-r from-blue-600 to-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, progressStats.percent))}%` }}
+                  />
+                </div>
+
+                {/* Current Active Target & Step Banner */}
+                {isExecutionActive && currentDevice && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-xl bg-slate-950/60 border border-blue-500/20 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                      <span className="text-slate-400">Équipement en cours :</span>
+                      <span className="font-bold text-slate-100">{currentDevice.label}</span>
+                      <span className="font-mono text-blue-400 text-[11px]">({currentDevice.ip})</span>
+                      <span className="text-slate-500 font-mono">[{currentDevice.index}/{currentDevice.total}]</span>
+                    </div>
+
+                    {currentStep && (
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <span className="text-slate-500">Étape {currentStep.index}/{currentStep.total} :</span>
+                        <span className="font-medium text-slate-200">{currentStep.name}</span>
+                        <code className="bg-slate-900 border border-slate-700/60 text-blue-400 px-1.5 py-0.5 rounded text-[11px]">
+                          $ {currentStep.command}
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Cancellation Alert Banner */}
+                {isCancelled && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold">Annulé par l'utilisateur.</span> L'opération a été interrompue proprement. Les résultats partiels obtenus sont conservés ci-dessous.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* View Switcher Tabs (Terminal vs Detailed Recap) */}
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRunViewTab('terminal')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                      runViewTab === 'terminal'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    }`}>
+                    <Terminal className="w-3.5 h-3.5" />
+                    Terminal en direct
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRunViewTab('recap')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                      runViewTab === 'recap'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    }`}>
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    Récapitulatif par équipement ({Object.keys(deviceStatusMap).length})
+                  </button>
+                </div>
+
+                {runViewTab === 'terminal' && userScrolledUp && (
+                  <button
+                    type="button"
+                    onClick={resumeAutoScroll}
+                    className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse">
+                    <ArrowDown className="w-3 h-3" /> Reprendre défilement
+                  </button>
+                )}
+              </div>
+
+              {/* Tab 1: Terminal output */}
+              {runViewTab === 'terminal' && (
+                <div className="relative">
+                  <div
+                    ref={termRef}
+                    onScroll={handleTerminalScroll}
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 h-84 overflow-y-auto font-mono text-xs space-y-1 shadow-inner custom-scrollbar">
+                    {termLines.map((line, i) => {
+                      if (line.type === 'device') {
+                        return (
+                          <div key={i} className="text-cyan-400 font-bold mt-3 first:mt-0 pb-0.5 border-b border-cyan-500/20">
+                            ── {line.label} ({line.ip}) [{line.index}/{line.total}] ──
+                          </div>
+                        )
+                      }
+                      if (line.type === 'step_start') {
+                        return (
+                          <div key={i} className="text-slate-400 mt-1">
+                            <span className="text-slate-600">[{line.index}/{line.total}]</span>{' '}
+                            <span className="text-slate-200 font-semibold">{line.name}</span>
+                            <span className="text-blue-400 ml-2">$ {line.command}</span>
+                          </div>
+                        )
+                      }
+                      if (line.type === 'output') {
+                        return (
+                          <pre key={i} className="text-slate-400 pl-4 py-1 whitespace-pre-wrap break-all leading-relaxed bg-slate-900/40 rounded border-l-2 border-slate-700 my-1">
+                            {line.text}
+                          </pre>
+                        )
+                      }
+                      if (line.type === 'step_ok') {
+                        return (
+                          <div key={i} className="text-emerald-400 pl-4 font-semibold">
+                            ✓ {line.name} (Validé)
+                          </div>
+                        )
+                      }
+                      if (line.type === 'step_err') {
+                        return (
+                          <div key={i} className="text-red-400 pl-4 font-semibold">
+                            ✗ {line.name} — {line.error}
+                          </div>
+                        )
+                      }
+                      if (line.type === 'device_done') {
+                        const ok = line.status === 'success'
+                        const isCanc = line.status === 'cancelled'
+                        return (
+                          <div
+                            key={i}
+                            className={`mt-1 font-bold pt-1 border-t border-white/[0.04] ${
+                              ok ? 'text-emerald-400' : isCanc ? 'text-amber-400' : 'text-red-400'
+                            }`}>
+                            {ok ? '✓' : isCanc ? '⚠' : '✗'} {line.label} terminé avec statut : {line.status}
+                          </div>
+                        )
+                      }
+                      if (line.type === 'system') {
+                        return (
+                          <div key={i} className="text-amber-400 font-bold p-2 rounded bg-amber-500/10 border border-amber-500/20 my-2">
+                            [SYSTÈME] {line.message}
+                          </div>
+                        )
+                      }
+                      return null
+                    })}
+                    {isExecutionActive && (
+                      <div className="text-blue-400 animate-pulse font-bold mt-2">▌ Exécution en cours...</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Detailed Recap Per Equipment */}
+              {runViewTab === 'recap' && (
+                <div className="space-y-2 max-h-84 overflow-y-auto pr-1 custom-scrollbar">
+                  {Object.values(deviceStatusMap).map(dev => {
+                    const isExpanded = expandedRecapDevice === dev.id
+                    // Look up corresponding result if available
+                    const execResult = results.find((r: any) => r.DeviceID === dev.id || r.DeviceIP === dev.ip)
+
+                    return (
+                      <div
+                        key={dev.id}
+                        className="rounded-xl border border-white/[0.05] bg-slate-900/40 overflow-hidden transition-all">
+                        <div
+                          onClick={() => setExpandedRecapDevice(isExpanded ? null : dev.id)}
+                          className="flex items-center justify-between p-3 cursor-pointer hover:bg-white/[0.02] transition-colors">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              className="text-slate-400 p-0.5">
+                              {isExpanded ? <ChevronDown className="w-4 h-4 text-blue-400" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                            <div>
+                              <div className="text-sm font-bold text-slate-200">{dev.label}</div>
+                              <div className="font-mono text-xs text-blue-400">{dev.ip}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            {execResult?.TotalMs != null && (
+                              <span className="text-xs text-slate-500 font-mono">
+                                {(execResult.TotalMs / 1000).toFixed(2)}s
+                              </span>
+                            )}
+                            <StatusBadge status={dev.status} />
+                          </div>
+                        </div>
+
+                        {/* Expanded details of steps for this device */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 pt-2 border-t border-white/[0.04] bg-slate-950/40 space-y-3">
+                            {execResult?.Steps && execResult.Steps.length > 0 ? (
+                              <div className="space-y-2">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                  Étapes exécutées ({execResult.Steps.length})
+                                </h4>
+                                {execResult.Steps.map((st: any, sIdx: number) => (
+                                  <div key={sIdx} className="rounded-lg bg-slate-900/60 border border-white/[0.04] p-3 space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-200">
+                                        Étape {sIdx + 1} : {st.name}
+                                      </span>
+                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                        st.passed ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                      }`}>
+                                        {st.passed ? 'Réussi' : 'Échec'}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs font-mono text-blue-400">$ {st.command}</div>
+                                    {st.output && (
+                                      <pre className="text-[11px] font-mono text-slate-300 bg-slate-950/80 p-2.5 rounded border border-white/[0.02] max-h-40 overflow-y-auto whitespace-pre-wrap break-all custom-scrollbar">
+                                        {st.output}
+                                      </pre>
+                                    )}
+                                    {st.error && (
+                                      <div className="text-xs text-red-400 font-semibold mt-1">
+                                        Erreur : {st.error}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500 italic py-2">
+                                {dev.status === 'pending'
+                                  ? 'En attente de traitement...'
+                                  : dev.status === 'running'
+                                  ? 'Équipement en cours d’exécution...'
+                                  : 'Aucun détail d’étape enregistré pour cet équipement.'}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               )}
             </div>
           )}

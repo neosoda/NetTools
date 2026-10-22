@@ -9,6 +9,16 @@ export interface Device {
   mac_address?: string;
   location?: string;
   contact?: string;
+  group_id?: string;
+  group_name?: string;
+}
+
+export interface DeviceGroup {
+  id: string;
+  name: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Credential {

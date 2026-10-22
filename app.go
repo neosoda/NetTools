@@ -43,11 +43,14 @@ type App struct {
 
 	mu          sync.Mutex
 	scanCancel  context.CancelFunc // cancel running scan
+	taskCancels map[string]context.CancelFunc // named task cancellations
 	lastScanIDs []string           // device IDs from last scan
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{
+		taskCancels: make(map[string]context.CancelFunc),
+	}
 }
 
 // startup is called at application start
@@ -151,18 +154,207 @@ func (a *App) shutdown(ctx context.Context) {
 // STOP ALL TASKS
 // ─────────────────────────────────────────────
 
-// StopAllTasks cancels any running scan or background task
+func (a *App) emitEvent(eventName string, optionalData ...interface{}) {
+	if a.ctx == nil {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	runtime.EventsEmit(a.ctx, eventName, optionalData...)
+}
+
+func (a *App) registerTaskCancel(taskType string, cancel context.CancelFunc) func() {
+	a.mu.Lock()
+	if a.taskCancels == nil {
+		a.taskCancels = make(map[string]context.CancelFunc)
+	}
+	if existing, ok := a.taskCancels[taskType]; ok && existing != nil {
+		existing()
+	}
+	a.taskCancels[taskType] = cancel
+	a.mu.Unlock()
+
+	return func() {
+		a.mu.Lock()
+		if cur, ok := a.taskCancels[taskType]; ok && cur != nil {
+			delete(a.taskCancels, taskType)
+		}
+		a.mu.Unlock()
+	}
+}
+
+// CancelTask cancels a specific running task by name ("playbook", "backup", "scan")
+func (a *App) CancelTask(taskType string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	canceled := false
+	if a.taskCancels != nil {
+		if cancel, ok := a.taskCancels[taskType]; ok && cancel != nil {
+			cancel()
+			delete(a.taskCancels, taskType)
+			canceled = true
+		}
+	}
+	if taskType == "scan" && a.scanCancel != nil {
+		a.scanCancel()
+		a.scanCancel = nil
+		canceled = true
+	}
+
+	if canceled {
+		a.emitEvent("task:cancelled", map[string]interface{}{"task": taskType, "message": "Arrêt demandé…"})
+		logger.Info(fmt.Sprintf("Tâche '%s' interrompue par l'utilisateur", taskType))
+	}
+	return canceled
+}
+
+// CancelPlaybook cancels the active playbook run
+func (a *App) CancelPlaybook() bool {
+	return a.CancelTask("playbook")
+}
+
+// CancelBackup cancels active backup operations
+func (a *App) CancelBackup() bool {
+	return a.CancelTask("backup")
+}
+
+// CancelScan cancels active SNMP scan
+func (a *App) CancelScan() bool {
+	return a.CancelTask("scan")
+}
+
+// StopAllTasks cancels any running scan, playbook, backup or background task
 func (a *App) StopAllTasks() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	hadTasks := false
+	if a.taskCancels != nil {
+		for name, cancel := range a.taskCancels {
+			if cancel != nil {
+				cancel()
+				hadTasks = true
+			}
+			delete(a.taskCancels, name)
+		}
+	}
 	if a.scanCancel != nil {
 		a.scanCancel()
 		a.scanCancel = nil
-		runtime.EventsEmit(a.ctx, "tasks:stopped", map[string]interface{}{"message": "Tâches arrêtées"})
+		hadTasks = true
+	}
+
+	if hadTasks {
+		a.emitEvent("tasks:stopped", map[string]interface{}{"message": "Toutes les tâches ont été arrêtées"})
 		logger.Info("Toutes les tâches ont été arrêtées par l'utilisateur")
 		return "stopped"
 	}
 	return "nothing_running"
+}
+
+// ─────────────────────────────────────────────
+// DEVICE GROUPS
+// ─────────────────────────────────────────────
+
+func (a *App) GetDeviceGroups() ([]models.DeviceGroup, error) {
+	if !db.Ready() {
+		return []models.DeviceGroup{}, nil
+	}
+	var groups []models.DeviceGroup
+	err := db.DB.Order("name ASC").Find(&groups).Error
+	return groups, err
+}
+
+func (a *App) SaveDeviceGroup(group models.DeviceGroup) (*models.DeviceGroup, error) {
+	if !db.Ready() {
+		return nil, fmt.Errorf("database not ready")
+	}
+	name := strings.TrimSpace(group.Name)
+	if name == "" {
+		return nil, fmt.Errorf("le nom du groupe ne peut pas être vide")
+	}
+	group.Name = name
+
+	if group.ID == "" {
+		var existing models.DeviceGroup
+		if err := db.DB.Where("LOWER(name) = LOWER(?)", name).First(&existing).Error; err == nil {
+			return nil, fmt.Errorf("un groupe avec le nom '%s' existe déjà", name)
+		}
+		group.ID = uuid.NewString()
+		if err := db.DB.Create(&group).Error; err != nil {
+			return nil, err
+		}
+		logger.AuditAction(a.ctx, "group_created", "device_group", group.ID, group.Name, "success", 0)
+	} else {
+		var existing models.DeviceGroup
+		if err := db.DB.First(&existing, "id = ?", group.ID).Error; err != nil {
+			return nil, fmt.Errorf("groupe introuvable: %w", err)
+		}
+		var duplicate models.DeviceGroup
+		if err := db.DB.Where("LOWER(name) = LOWER(?) AND id != ?", name, group.ID).First(&duplicate).Error; err == nil {
+			return nil, fmt.Errorf("un autre groupe avec le nom '%s' existe déjà", name)
+		}
+		existing.Name = name
+		existing.Description = group.Description
+		if err := db.DB.Save(&existing).Error; err != nil {
+			return nil, err
+		}
+		_ = db.DB.Model(&models.Device{}).Where("group_id = ?", group.ID).Update("group_name", name).Error
+		group = existing
+		logger.AuditAction(a.ctx, "group_updated", "device_group", group.ID, group.Name, "success", 0)
+	}
+	return &group, nil
+}
+
+func (a *App) DeleteDeviceGroup(id string) error {
+	if !db.Ready() {
+		return fmt.Errorf("database not ready")
+	}
+	// When a group is deleted, unassign affected devices to "Non classés"
+	if err := db.DB.Model(&models.Device{}).Where("group_id = ?", id).Updates(map[string]interface{}{
+		"group_id":   "",
+		"group_name": "",
+	}).Error; err != nil {
+		return err
+	}
+	err := db.DB.Delete(&models.DeviceGroup{}, "id = ?", id).Error
+	if err == nil {
+		logger.AuditAction(a.ctx, "group_deleted", "device_group", id, "", "success", 0)
+	}
+	return err
+}
+
+func (a *App) AssignDevicesToGroup(deviceIDs []string, groupID string) error {
+	if !db.Ready() {
+		return fmt.Errorf("database not ready")
+	}
+	if len(deviceIDs) == 0 {
+		return nil
+	}
+	groupID = strings.TrimSpace(groupID)
+	groupName := ""
+	if groupID != "" && groupID != "none" && groupID != "unassigned" {
+		var g models.DeviceGroup
+		if err := db.DB.First(&g, "id = ?", groupID).Error; err != nil {
+			return fmt.Errorf("groupe introuvable: %w", err)
+		}
+		groupID = g.ID
+		groupName = g.Name
+	} else {
+		groupID = ""
+		groupName = ""
+	}
+
+	err := db.DB.Model(&models.Device{}).Where("id IN ?", deviceIDs).Updates(map[string]interface{}{
+		"group_id":   groupID,
+		"group_name": groupName,
+	}).Error
+	if err == nil {
+		logger.AuditAction(a.ctx, "devices_assigned_to_group", "device_group", groupID, fmt.Sprintf("%d devices", len(deviceIDs)), "success", 0)
+	}
+	return err
 }
 
 // ─────────────────────────────────────────────
@@ -284,6 +476,26 @@ func mergeImportedDevices(database *gorm.DB, devices []models.Device) (int, erro
 			}
 			seenIPs[importedDevice.IP] = struct{}{}
 
+			// Ensure group exists if specified
+			gName := strings.TrimSpace(importedDevice.GroupName)
+			if gName != "" {
+				var g models.DeviceGroup
+				if err := tx.Where("LOWER(name) = LOWER(?)", gName).First(&g).Error; err != nil {
+					newGID := importedDevice.GroupID
+					if newGID == "" {
+						newGID = uuid.NewString()
+					}
+					var existingByID models.DeviceGroup
+					if tx.First(&existingByID, "id = ?", newGID).Error == nil {
+						newGID = uuid.NewString()
+					}
+					g = models.DeviceGroup{ID: newGID, Name: gName}
+					_ = tx.Create(&g).Error
+				}
+				importedDevice.GroupID = g.ID
+				importedDevice.GroupName = g.Name
+			}
+
 			var existing models.Device
 			err := tx.Where("ip = ?", importedDevice.IP).First(&existing).Error
 			switch {
@@ -368,6 +580,12 @@ func mergeImportedDevice(existing, imported models.Device) models.Device {
 	}
 	if imported.ConnectivityStatus != "" {
 		existing.ConnectivityStatus = imported.ConnectivityStatus
+	}
+	if imported.GroupID != "" {
+		existing.GroupID = imported.GroupID
+	}
+	if imported.GroupName != "" {
+		existing.GroupName = imported.GroupName
 	}
 	return existing
 }
@@ -730,6 +948,10 @@ func (a *App) ScanNetwork(req ScanRequest) ([]models.Device, error) {
 	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Minute)
 	a.scanCancel = cancel
+	if a.taskCancels == nil {
+		a.taskCancels = make(map[string]context.CancelFunc)
+	}
+	a.taskCancels["scan"] = cancel
 	a.mu.Unlock()
 
 	defer func() {
@@ -1276,8 +1498,13 @@ func (a *App) RunBackup(req BackupRequest) ([]models.Backup, error) {
 	}
 
 	// Run backups concurrently (5 workers by default)
-	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Minute)
+	backupCtx, cancel := context.WithCancel(a.ctx)
+	cleanup := a.registerTaskCancel("backup", cancel)
+	defer cleanup()
 	defer cancel()
+
+	ctx, timeoutCancel := context.WithTimeout(backupCtx, 10*time.Minute)
+	defer timeoutCancel()
 
 	start := time.Now()
 	concurrentResults := a.backupMgr.RunConcurrent(ctx, backupReqs, 5, func(br backup.BackupResult, done, total int) {
@@ -1719,10 +1946,59 @@ func (a *App) RunPlaybook(req PlaybookRunRequest) ([]playbook.ExecutionResult, e
 		return nil, err
 	}
 
+	totalDevices := len(req.DeviceIDs)
 	var results []playbook.ExecutionResult
-	for _, deviceID := range req.DeviceIDs {
+
+	playbookCtx, cancel := context.WithCancel(a.ctx)
+	cleanup := a.registerTaskCancel("playbook", cancel)
+	defer cleanup()
+	defer cancel()
+
+	successCount := 0
+	failedCount := 0
+	cancelledCount := 0
+
+	// Initial progress state
+	a.emitEvent("playbook:progress", map[string]interface{}{
+		"total":           totalDevices,
+		"processed":       0,
+		"success_count":   0,
+		"failed_count":    0,
+		"cancelled_count": 0,
+		"remaining_count": totalDevices,
+		"percent":         0,
+		"status":          "running",
+	})
+
+	for i, deviceID := range req.DeviceIDs {
+		select {
+		case <-playbookCtx.Done():
+			cancelledCount += (totalDevices - i)
+			percent := 0
+			if totalDevices > 0 {
+				percent = i * 100 / totalDevices
+			}
+			a.emitEvent("playbook:progress", map[string]interface{}{
+				"total":           totalDevices,
+				"processed":       i,
+				"success_count":   successCount,
+				"failed_count":    failedCount,
+				"cancelled_count": cancelledCount,
+				"remaining_count": 0,
+				"percent":         percent,
+				"status":          "cancelled",
+				"message":         "Annulé par l'utilisateur",
+			})
+			a.emitEvent("playbook:stopped", map[string]interface{}{
+				"message": "Annulé par l'utilisateur",
+			})
+			return results, nil
+		default:
+		}
+
 		var device models.Device
 		if err := db.DB.First(&device, "id = ?", deviceID).Error; err != nil {
+			failedCount++
 			continue
 		}
 		if device.SSHPort == 0 {
@@ -1734,6 +2010,7 @@ func (a *App) RunPlaybook(req PlaybookRunRequest) ([]playbook.ExecutionResult, e
 		}
 		username, password, _, err := a.getCredentials(credID)
 		if err != nil {
+			failedCount++
 			continue
 		}
 
@@ -1741,49 +2018,87 @@ func (a *App) RunPlaybook(req PlaybookRunRequest) ([]playbook.ExecutionResult, e
 		if deviceLabel == "" {
 			deviceLabel = device.IP
 		}
-		runtime.EventsEmit(a.ctx, "playbook:step", map[string]interface{}{
-			"type":         "device_start",
-			"device_id":    device.ID,
-			"device_ip":    device.IP,
-			"device_label": deviceLabel,
+		a.emitEvent("playbook:step", map[string]interface{}{
+			"type":          "device_start",
+			"device_id":     device.ID,
+			"device_ip":     device.IP,
+			"device_label":  deviceLabel,
+			"device_index":  i + 1,
+			"total_devices": totalDevices,
 		})
 
-		ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
+		ctx, deviceCancel := context.WithTimeout(playbookCtx, 5*time.Minute)
 		result, runErr := playbook.Run(ctx, def, device, username, password, func(evt playbook.StepEvent) {
 			data := map[string]interface{}{
-				"device_id":    evt.DeviceID,
-				"device_ip":    evt.DeviceIP,
-				"device_label": evt.DeviceLabel,
-				"step_index":   evt.StepIndex,
-				"total_steps":  evt.TotalSteps,
-				"step_name":    evt.StepName,
-				"command":      evt.Command,
-				"done":         evt.Done,
+				"type":          "step_update",
+				"device_id":     evt.DeviceID,
+				"device_ip":     evt.DeviceIP,
+				"device_label":  evt.DeviceLabel,
+				"device_index":  i + 1,
+				"total_devices": totalDevices,
+				"step_index":    evt.StepIndex,
+				"total_steps":   evt.TotalSteps,
+				"step_name":     evt.StepName,
+				"command":       evt.Command,
+				"done":          evt.Done,
 			}
 			if evt.Done {
 				data["output"] = evt.Output
 				data["passed"] = evt.Passed
 				data["error"] = evt.Error
 			}
-			runtime.EventsEmit(a.ctx, "playbook:step", data)
+			a.emitEvent("playbook:step", data)
 		})
-		cancel()
+		deviceCancel()
 
 		if result != nil {
 			results = append(results, *result)
 		}
 
 		status := "success"
-		if runErr != nil {
+		isCancelled := errors.Is(runErr, context.Canceled) || playbookCtx.Err() != nil
+		if isCancelled {
+			status = "cancelled"
+			cancelledCount++
+		} else if runErr != nil {
 			status = "failed"
+			failedCount++
+		} else {
+			successCount++
 		}
-		runtime.EventsEmit(a.ctx, "playbook:progress", map[string]interface{}{
-			"device_id": deviceID,
-			"status":    status,
+
+		processed := i + 1
+		percent := 0
+		if totalDevices > 0 {
+			percent = processed * 100 / totalDevices
+		}
+
+		a.emitEvent("playbook:progress", map[string]interface{}{
+			"device_id":       deviceID,
+			"device_ip":       device.IP,
+			"device_label":    deviceLabel,
+			"device_index":    i + 1,
+			"total_devices":   totalDevices,
+			"status":          status,
+			"processed":       processed,
+			"total":           totalDevices,
+			"success_count":   successCount,
+			"failed_count":    failedCount,
+			"cancelled_count": cancelledCount,
+			"remaining_count": totalDevices - processed,
+			"percent":         percent,
 		})
+
 		logger.AuditAction(a.ctx, "playbook_run", "device", deviceID,
 			fmt.Sprintf(`{"ip":"%s","playbook":"%s","status":"%s"}`, device.IP, pb.Name, status),
 			status, 0)
+
+		if isCancelled {
+			a.emitEvent("playbook:stopped", map[string]interface{}{
+				"message": "Annulé par l'utilisateur",
+			})
+			break
+		}
 	}
 	return results, nil
 }

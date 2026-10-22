@@ -27,7 +27,7 @@ test:
 	$(MAKE) test-app
 
 test-app:
-	go test -mod=readonly app.go app_inventory_test.go -count=1
+	go test -mod=readonly app.go app_inventory_test.go app_groups_test.go -count=1
 
 test-cover:
 	go test -mod=readonly ./internal/... -coverprofile=coverage.out -count=1

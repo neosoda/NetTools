@@ -602,6 +602,8 @@ export namespace models {
 	    ssh_port: number;
 	    credential_id: string;
 	    description: string;
+	    group_id: string;
+	    group_name: string;
 	    // Go type: time
 	    last_seen_at?: any;
 	    // Go type: time
@@ -635,9 +637,51 @@ export namespace models {
 	        this.ssh_port = source["ssh_port"];
 	        this.credential_id = source["credential_id"];
 	        this.description = source["description"];
+	        this.group_id = source["group_id"];
+	        this.group_name = source["group_name"];
 	        this.last_seen_at = this.convertValues(source["last_seen_at"], null);
 	        this.last_connectivity_check_at = this.convertValues(source["last_connectivity_check_at"], null);
 	        this.connectivity_status = source["connectivity_status"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DeviceGroup {
+	    id: string;
+	    name: string;
+	    description: string;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }

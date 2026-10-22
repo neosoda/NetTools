@@ -7,6 +7,16 @@ import {audit} from '../models';
 import {playbook} from '../models';
 import {ssh} from '../models';
 
+export function AssignDevicesToGroup(arg1:Array<string>,arg2:string):Promise<void>;
+
+export function CancelBackup():Promise<boolean>;
+
+export function CancelPlaybook():Promise<boolean>;
+
+export function CancelScan():Promise<boolean>;
+
+export function CancelTask(arg1:string):Promise<boolean>;
+
 export function ClearInventory():Promise<void>;
 
 export function CompareBackups(arg1:string,arg2:string):Promise<diff.DiffResult>;
@@ -18,6 +28,8 @@ export function DeleteAuditRule(arg1:string):Promise<void>;
 export function DeleteCredential(arg1:string):Promise<void>;
 
 export function DeleteDevice(arg1:string):Promise<void>;
+
+export function DeleteDeviceGroup(arg1:string):Promise<void>;
 
 export function DeletePlaybook(arg1:string):Promise<void>;
 
@@ -44,6 +56,8 @@ export function GetBackups(arg1:string):Promise<Array<models.Backup>>;
 export function GetCredentials():Promise<Array<models.CredentialView>>;
 
 export function GetDevice(arg1:string):Promise<models.Device>;
+
+export function GetDeviceGroups():Promise<Array<models.DeviceGroup>>;
 
 export function GetDevices():Promise<Array<models.Device>>;
 
@@ -82,6 +96,8 @@ export function SaveAuditRule(arg1:models.AuditRule):Promise<models.AuditRule>;
 export function SaveCredential(arg1:main.CredentialInput):Promise<models.CredentialView>;
 
 export function SaveDevice(arg1:models.Device):Promise<models.Device>;
+
+export function SaveDeviceGroup(arg1:models.DeviceGroup):Promise<models.DeviceGroup>;
 
 export function SavePlaybook(arg1:models.Playbook):Promise<models.Playbook>;
 

@@ -22,6 +22,8 @@ type Device struct {
 	SSHPort       int    `json:"ssh_port" gorm:"default:22"`
 	CredentialID  string `json:"credential_id"`
 	Description   string `json:"description"`
+	GroupID       string `json:"group_id" gorm:"index"`
+	GroupName     string `json:"group_name"`
 	// LastSeenAt is the date of the last successful SNMP discovery. It is not a
 	// reachability indicator outside of that scan.
 	LastSeenAt              *time.Time `json:"last_seen_at"`
@@ -29,6 +31,14 @@ type Device struct {
 	ConnectivityStatus      string     `json:"connectivity_status"` // unknown|reachable|unreachable
 	CreatedAt               time.Time  `json:"created_at"`
 	UpdatedAt               time.Time  `json:"updated_at"`
+}
+
+type DeviceGroup struct {
+	ID          string    `json:"id" gorm:"primaryKey"`
+	Name        string    `json:"name" gorm:"uniqueIndex;not null"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Credential struct {
