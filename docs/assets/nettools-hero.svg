@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="520" viewBox="0 0 1400 520" role="img" aria-labelledby="title desc">
+<title id="title">NetTools — Network operations, simplified</title>
+<desc id="desc">Bannière graphique de NetTools : découverte, inventaire, sauvegarde et audit réseau. Illustration conceptuelle, pas une capture de l'application.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#081327"/><stop offset=".56" stop-color="#0d1c36"/><stop offset="1" stop-color="#122e43"/></linearGradient>
+  <radialGradient id="glow" cx="76%" cy="40%" r="62%"><stop stop-color="#1d9baf" stop-opacity=".21"/><stop offset="1" stop-color="#1d9baf" stop-opacity="0"/></radialGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#56e3d5"/><stop offset="1" stop-color="#72aaff"/></linearGradient>
+  <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#152840"/><stop offset="1" stop-color="#0d1b30"/></linearGradient>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#7ba0c1" stroke-opacity=".08" stroke-width="1"/></pattern>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#000610" flood-opacity=".48"/></filter>
+</defs>
+<rect width="1400" height="520" rx="28" fill="url(#bg)"/>
+<rect width="1400" height="520" rx="28" fill="url(#grid)"/>
+<rect width="1400" height="520" rx="28" fill="url(#glow)"/>
+<circle cx="1170" cy="60" r="220" fill="#48b7c8" opacity=".045"/>
+<circle cx="1040" cy="430" r="330" fill="none" stroke="#65e2d6" stroke-opacity=".09" stroke-width="1"/>
+<path d="M0 470Q390 350 690 500" stroke="#4ed3d7" stroke-opacity=".09" stroke-width="2" fill="none"/>
+<!-- Brand mark -->
+<g transform="translate(74 71)">
+ <rect width="48" height="48" rx="14" fill="#193c50" stroke="#60dbd3" stroke-opacity=".55"/>
+ <path d="M12 32V16l12 16V16M30 16h7a6 6 0 0 1 0 12h-7V16z" fill="none" stroke="#6de9db" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+ <text x="65" y="19" fill="#b9e7e7" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" letter-spacing="4">NETWORK OPERATIONS</text>
+ <text x="65" y="39" fill="#7497ad" font-family="Segoe UI,Arial,sans-serif" font-size="12" letter-spacing="2">A DESKTOP WORKSPACE FOR ADMINS</text>
+</g>
+<text x="72" y="238" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="104" font-weight="800" letter-spacing="-4">Net<tspan fill="url(#accent)">Tools</tspan></text>
+<text x="76" y="291" fill="#e7f4ff" font-family="Segoe UI,Arial,sans-serif" font-size="29" font-weight="600">Votre réseau. Une vision claire.</text>
+<text x="76" y="332" fill="#a8c1d3" font-family="Segoe UI,Arial,sans-serif" font-size="19">Découvrir, organiser, sauvegarder, auditer.</text>
+<text x="76" y="361" fill="#a8c1d3" font-family="Segoe UI,Arial,sans-serif" font-size="19">Sans cloud imposé. Sans complexité inutile.</text>
+<g font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1">
+ <rect x="76" y="411" width="161" height="42" rx="21" fill="#17394b" stroke="#4fceca" stroke-opacity=".55"/>
+ <text x="156" y="437" fill="#a7fff1" text-anchor="middle">SNMP DISCOVERY</text>
+ <rect x="249" y="411" width="130" height="42" rx="21" fill="#19324b" stroke="#78aaff" stroke-opacity=".4"/>
+ <text x="314" y="437" fill="#c0d9ff" text-anchor="middle">SSH BACKUP</text>
+ <rect x="392" y="411" width="159" height="42" rx="21" fill="#19324b" stroke="#78aaff" stroke-opacity=".4"/>
+ <text x="471" y="437" fill="#c0d9ff" text-anchor="middle">CONFIG AUDIT</text>
+</g>
+<!-- Abstract dashboard illustration -->
+<g filter="url(#shadow)">
+ <rect x="755" y="73" width="578" height="387" rx="21" fill="url(#panel)" stroke="#3a657c" stroke-width="1.4"/>
+ <path d="M776 73H1312Q1333 73 1333 94V125H755V94Q755 73 776 73Z" fill="#1c334c"/>
+ <circle cx="784" cy="99" r="6" fill="#fb818c"/>
+ <circle cx="806" cy="99" r="6" fill="#ffd37a"/>
+ <circle cx="828" cy="99" r="6" fill="#70dbc0"/>
+ <text x="861" y="105" fill="#d8ecf7" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1">NETTOOLS / WORKSPACE</text>
+ <rect x="1179" y="88" width="130" height="22" rx="11" fill="#194b4e"/>
+ <circle cx="1198" cy="99" r="4" fill="#70efc5"/>
+ <text x="1213" y="104" fill="#99f1d8" font-family="Segoe UI,Arial,sans-serif" font-size="11">LOCAL FIRST</text>
+ <rect x="778" y="149" width="165" height="287" rx="11" fill="#102137" stroke="#29465b"/>
+ <text x="796" y="178" fill="#6c8fa9" font-family="Segoe UI,Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">INVENTAIRE</text>
+ <g font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#c5dbe9">
+  <rect x="790" y="194" width="142" height="37" rx="7" fill="#244d5b"/>
+  <circle cx="805" cy="212" r="4" fill="#6de8c2"/><text x="819" y="217">Site principal</text>
+  <circle cx="805" cy="254" r="4" fill="#6de8c2"/><text x="819" y="259">Bâtiment A</text>
+  <circle cx="805" cy="292" r="4" fill="#6de8c2"/><text x="819" y="297">Bâtiment B</text>
+  <circle cx="805" cy="330" r="4" fill="#6de8c2"/><text x="819" y="335">Infrastructure</text>
+  <path d="M797 352h126" stroke="#355066"/>
+  <text x="797" y="380" fill="#7f9db1" font-size="11">GROUPES &amp; SÉLECTION</text>
+  <rect x="797" y="391" width="113" height="7" rx="3" fill="#3b6175"/>
+  <rect x="797" y="405" width="82" height="7" rx="3" fill="#29475e"/>
+ </g>
+ <text x="968" y="176" fill="#f5fbff" font-family="Segoe UI,Arial,sans-serif" font-size="19" font-weight="700">Vue des opérations</text>
+ <text x="969" y="196" fill="#7898b0" font-family="Segoe UI,Arial,sans-serif" font-size="12">Du scan à la vérification</text>
+ <g font-family="Segoe UI,Arial,sans-serif">
+  <rect x="968" y="218" width="104" height="90" rx="11" fill="#173b48" stroke="#30776f"/>
+  <text x="980" y="244" fill="#83d6c8" font-size="11" font-weight="700">01 / SCAN</text>
+  <path d="M992 277l13-13 15 7 22-23" fill="none" stroke="#66e5d1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1042" cy="248" r="4" fill="#66e5d1"/>
+  <rect x="1080" y="218" width="104" height="90" rx="11" fill="#162c47" stroke="#3b638e"/>
+  <text x="1092" y="244" fill="#9dc1fb" font-size="11" font-weight="700">02 / BACKUP</text>
+  <rect x="1095" y="258" width="74" height="7" rx="3" fill="#476f9f"/>
+  <rect x="1095" y="272" width="54" height="7" rx="3" fill="#476f9f"/>
+  <rect x="1192" y="218" width="115" height="90" rx="11" fill="#162c47" stroke="#3b638e"/>
+  <text x="1204" y="244" fill="#9dc1fb" font-size="11" font-weight="700">03 / AUDIT</text>
+  <circle cx="1220" cy="275" r="12" fill="none" stroke="#6ce5c1" stroke-width="3"/>
+  <path d="M1214 275l5 5 9-12" fill="none" stroke="#6ce5c1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="968" y="324" width="339" height="112" rx="11" fill="#0e2235" stroke="#2d4d62"/>
+  <text x="985" y="347" fill="#7e9db3" font-size="12" font-weight="700" letter-spacing="1">WORKFLOW</text>
+  <path d="M1006 383H1268" stroke="#2e4d60" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1006 383H1185" stroke="#55c7c8" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#62e3d2"><circle cx="1006" cy="383" r="7"/><circle cx="1092" cy="383" r="7"/><circle cx="1179" cy="383" r="7"/></g>
+  <circle cx="1268" cy="383" r="7" fill="#193b55" stroke="#688da2" stroke-width="2"/>
+  <g font-size="10" fill="#9bb5c7" text-anchor="middle"><text x="1006" y="407">DISCOVER</text><text x="1092" y="407">ORGANIZE</text><text x="1179" y="407">BACK UP</text><text x="1268" y="407">REVIEW</text></g>
+ </g>
+</g>
+<text x="1325" y="491" fill="#7594aa" font-family="Segoe UI,Arial,sans-serif" font-size="12" text-anchor="end" letter-spacing="1">ILLUSTRATION CONCEPTUELLE</text>
+</svg>
