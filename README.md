@@ -148,7 +148,7 @@ npm run check
 Pour produire et publier **une nouvelle release Windows sans GitHub Actions**, lancez sous PowerShell, depuis `master` à jour et propre :
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\tools\\publish_release.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\publish_release.ps1
 ```
 
 Prérequis supplémentaires : `gh` authentifié (`gh auth login`), Go, Node.js et Wails CLI. Ce script vérifie les tests, compile, produit le SHA-256, puis crée le tag et la release GitHub de la version définie dans `wails.json`. Il refuse d’écraser une release existante.
