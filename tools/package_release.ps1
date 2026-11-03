@@ -32,20 +32,7 @@ if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) {
 }
 
 $embeddedVersion = (Get-Item -LiteralPath $sourceExe).VersionInfo.ProductVersion
-$expectedVersionPattern = '^' + [regex]::Escape($version) + '(?:\.0)?
-New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
-
-$filename = "NetTools-$version.exe"
-$releaseExe = Join-Path $releaseDir $filename
-Copy-Item -LiteralPath $sourceExe -Destination $releaseExe -Force
-
-$hash = (Get-FileHash -LiteralPath $releaseExe -Algorithm SHA256).Hash.ToLowerInvariant()
-$checksumFile = "$releaseExe.sha256"
-Set-Content -LiteralPath $checksumFile -Encoding ASCII -Value "$hash  $filename"
-
-Write-Host "Release prête : $releaseExe"
-Write-Host "Empreinte SHA-256 : $checksumFile"
-
+$expectedVersionPattern = '^' + [regex]::Escape($version) + '(?:\.0)?$'
 if ($embeddedVersion -notmatch $expectedVersionPattern) {
     throw "Version Windows incorrecte : attendu '$version', détecté '$embeddedVersion'."
 }
