@@ -17,7 +17,7 @@ if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
 
 Push-Location $root
 try {
-    & npm run build
+    & npm.cmd run build
     if ($LASTEXITCODE -ne 0) {
         throw "La compilation Wails a échoué (code $LASTEXITCODE)."
     }
