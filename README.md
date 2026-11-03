@@ -84,15 +84,16 @@ flowchart LR
 **Prérequis :** Windows **10/11 64 bits** avec [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (généralement déjà installé).
 
 1. Ouvrez la page [**Dernière version de NetTools**](https://github.com/neosoda/NetTools/releases/latest).
-2. Téléchargez `NetTools.exe` et le fichier `.sha256` correspondant.
+2. Téléchargez l'exécutable et son fichier `.sha256` (ex. `NetTools-1.7.0.exe` et `NetTools-1.7.0.exe.sha256`). Les anciennes releases peuvent encore proposer `NetTools.exe`.
 3. Vérifiez l'empreinte depuis PowerShell :
 
    ```powershell
-   Get-FileHash .\NetTools.exe -Algorithm SHA256
-   Get-Content .\NetTools.exe.sha256
+   $exe = Get-ChildItem -File .\NetTools*.exe | Select-Object -First 1
+   Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256
+   Get-Content -LiteralPath "$($exe.FullName).sha256"
    ```
 
-4. Lancez `NetTools.exe`, configurez vos profils **SSH/SNMP** dans **Paramètres**, puis commencez avec **Découverte**.
+4. Lancez l'exécutable téléchargé, configurez vos profils **SSH/SNMP** dans **Paramètres**, puis commencez avec **Découverte**.
 
 > **À savoir :** une empreinte correspondante confirme la cohérence avec le fichier de contrôle téléchargé, pas l'authenticité indépendante du binaire. Téléchargez depuis les releases officielles.
 
@@ -150,7 +151,7 @@ Pour compiler l'application sous Windows :
 npm run build
 ```
 
-L'exécutable est généré dans `build/bin/NetTools.exe`. Pensez à ajouter `$(go env GOPATH)/bin` (ou son équivalent Windows) au `PATH` pour utiliser `wails`.
+La compilation produit `build/bin/NetTools.exe`. Pour préparer les fichiers à publier, utilisez sous Windows `powershell -NoProfile -ExecutionPolicy Bypass -File tools/package_release.ps1` : le dossier `release/` contiendra `NetTools-<version>.exe` et son `.sha256`, avec une version lue automatiquement depuis `wails.json`. Pensez à ajouter `$(go env GOPATH)/bin` (ou son équivalent Windows) au `PATH` pour utiliser `wails`.
 
 Le frontend et le backend disposent de contrôles automatisés ; leur existence ne remplace pas les essais sur de vrais équipements autorisés.
 
