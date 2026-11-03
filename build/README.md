@@ -28,7 +28,9 @@ Depuis la racine, installez les outils et dépendances selon
 npm run build
 ```
 
-La sortie Windows attendue est `build/bin/NetTools.exe`. Une compilation par
+La sortie Windows attendue est `build/bin/NetTools.exe`. Pour distribuer une release, lancez sous Windows `powershell -NoProfile -ExecutionPolicy Bypass -File tools/package_release.ps1` depuis la racine : ce script compile l'application et génère `release/NetTools-<version>.exe` ainsi que `release/NetTools-<version>.exe.sha256`. La version provient de `wails.json` (`info.productVersion`), sans renommer le fichier de développement. Vérifiez qu'elle correspond au tag GitHub avant publication.
+
+Une compilation par
 `go build` seule sert à vérifier le code, mais ne valide pas tout le packaging
 Wails : propriétés du fichier, icône et comportement WebView2 doivent être
 contrôlés séparément sur Windows.
