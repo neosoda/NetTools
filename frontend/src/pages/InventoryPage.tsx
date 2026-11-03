@@ -95,6 +95,7 @@ export default function InventoryPage() {
   const [editDevice, setEditDevice] = useState<Partial<Device> | null>(null)
   const [showGroupManager, setShowGroupManager] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
+  const [manageGroupsInAssign, setManageGroupsInAssign] = useState(false)
   const [selectedTargetGroupId, setSelectedTargetGroupId] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupDesc, setNewGroupDesc] = useState('')
@@ -169,9 +170,13 @@ export default function InventoryPage() {
 
   const saveGroupMutation = useMutation({
     mutationFn: (grp: Partial<DeviceGroup>) => backend.SaveDeviceGroup(grp as any),
-    onSuccess: () => {
+    onSuccess: (savedGroup, submitted) => {
       qc.invalidateQueries({ queryKey: ['device-groups'] })
       qc.invalidateQueries({ queryKey: ['devices'] })
+      if (!submitted.id && showAssignModal) {
+        setSelectedTargetGroupId(savedGroup.id)
+        setManageGroupsInAssign(false)
+      }
       setNewGroupName('')
       setNewGroupDesc('')
       setEditingGroup(null)
@@ -182,9 +187,12 @@ export default function InventoryPage() {
 
   const deleteGroupMutation = useMutation({
     mutationFn: (id: string) => backend.DeleteDeviceGroup(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ['device-groups'] })
       qc.invalidateQueries({ queryKey: ['devices'] })
+      setSelectedTargetGroupId(current => current === deletedId ? '' : current)
+      setGroupFilter(current => current === deletedId ? 'all' : current)
+      setEditingGroup(current => current?.id === deletedId ? null : current)
       setConfirmDeleteGroupId(null)
       toast('Groupe supprimé. Les équipements sont passés dans « Non classés »', 'success')
     },
@@ -384,6 +392,131 @@ export default function InventoryPage() {
     { value: '__unassigned__', label: 'Non classés uniquement' },
   ]
 
+  // One group management panel reused in inventory and in the assignment dialog.
+  const renderGroupManagement = (inAssignment: boolean) => (
+        <div className="space-y-6">
+          {/* Create or Edit Group Form */}
+          <div className="bg-slate-950/40 p-4 rounded-xl border border-white/[0.05] space-y-3">
+            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <FolderPlus className="w-4 h-4 text-blue-400" />
+              {editingGroup ? `Renommer le groupe « ${editingGroup.name} »` : 'Créer un nouveau groupe'}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label="Nom du groupe *"
+                placeholder="Ex : Lycée Victor Hugo, Bâtiment C, Site Nord"
+                value={editingGroup ? editingGroup.name : newGroupName}
+                onChange={e => {
+                  if (editingGroup) setEditingGroup({ ...editingGroup, name: e.target.value })
+                  else setNewGroupName(e.target.value)
+                }}
+              />
+              <Input
+                label="Description"
+                placeholder="Ex : 2ème étage, armoire réseau brassage"
+                value={editingGroup ? editingGroup.description || '' : newGroupDesc}
+                onChange={e => {
+                  if (editingGroup) setEditingGroup({ ...editingGroup, description: e.target.value })
+                  else setNewGroupDesc(e.target.value)
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              {editingGroup && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEditingGroup(null)}>
+                  Annuler modification
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="primary"
+                loading={saveGroupMutation.isPending}
+                disabled={!(editingGroup ? editingGroup.name.trim() : newGroupName.trim())}
+                onClick={() => {
+                  if (editingGroup) {
+                    saveGroupMutation.mutate(editingGroup)
+                  } else {
+                    saveGroupMutation.mutate({ name: newGroupName.trim(), description: newGroupDesc.trim() })
+                  }
+                }}>
+                {editingGroup ? 'Mettre à jour' : 'Ajouter le groupe'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Existing Groups List */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Groupes configurés</h4>
+            <div className="max-h-64 divide-y divide-white/[0.04] overflow-y-auto rounded-xl border border-white/[0.05] bg-slate-900/40 custom-scrollbar">
+              {(groups as DeviceGroup[]).map(g => {
+                const count = (devices as Device[]).filter(d => d.group_id === g.id).length
+                return (
+                  <div key={g.id} className="flex items-center justify-between p-3.5 hover:bg-white/[0.02] transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Folder className="w-5 h-5 text-blue-400 shrink-0" />
+                      <div>
+                        <div className="text-sm font-bold text-slate-200">{g.name}</div>
+                        {g.description && <div className="text-xs text-slate-500">{g.description}</div>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
+                        {count} équipement{count > 1 ? 's' : ''}
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setEditingGroup(g)}
+                        className="w-7 h-7 text-slate-400 hover:text-blue-400"
+                        title="Éditer">
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                      {confirmDeleteGroupId === g.id ? (
+                        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-2 py-1">
+                          <span className="text-[11px] text-red-300">
+                            {count > 0 ? `${count} équipement(s) vers « Non classés » ?` : 'Supprimer ce groupe ?'}
+                          </span>
+                          <button type="button" disabled={deleteGroupMutation.isPending}
+                            onClick={() => deleteGroupMutation.mutate(g.id)}
+                            className="text-xs font-semibold text-red-300 hover:text-red-200 disabled:opacity-50">
+                            Confirmer
+                          </button>
+                          <button type="button" onClick={() => setConfirmDeleteGroupId(null)}
+                            className="text-xs text-slate-300 hover:text-white">
+                            Annuler
+                          </button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setConfirmDeleteGroupId(g.id)}
+                          className="w-7 h-7 text-slate-400 hover:text-red-400"
+                          title="Supprimer le groupe">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {(groups as DeviceGroup[]).length === 0 && (
+                <div className="p-6 text-center text-xs text-slate-500">
+                  Aucun groupe personnalisé pour le moment. Créez-en un ci-dessus.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-white/[0.04]">
+            <Button onClick={() => inAssignment ? setManageGroupsInAssign(false) : setShowGroupManager(false)}>Fermer</Button>
+          </div>
+        </div>
+  )
+
   return (
     <div className="flex flex-col h-full">
       <PageHeader
@@ -478,7 +611,7 @@ export default function InventoryPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="secondary" onClick={() => { setSelectedTargetGroupId(''); setShowAssignModal(true) }}>
+              <Button size="sm" variant="secondary" onClick={() => { setSelectedTargetGroupId(''); setManageGroupsInAssign(false); setShowAssignModal(true) }}>
                 <MoveRight className="w-3.5 h-3.5 text-blue-400" />
                 Assigner au groupe…
               </Button>
@@ -881,110 +1014,7 @@ export default function InventoryPage() {
         }}
         title="Gestion des groupes d'équipements"
         size="lg">
-        <div className="space-y-6">
-          {/* Create or Edit Group Form */}
-          <div className="bg-slate-950/40 p-4 rounded-xl border border-white/[0.05] space-y-3">
-            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-              <FolderPlus className="w-4 h-4 text-blue-400" />
-              {editingGroup ? `Renommer le groupe « ${editingGroup.name} »` : 'Créer un nouveau groupe'}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input
-                label="Nom du groupe *"
-                placeholder="Ex : Lycée Victor Hugo, Bâtiment C, Site Nord"
-                value={editingGroup ? editingGroup.name : newGroupName}
-                onChange={e => {
-                  if (editingGroup) setEditingGroup({ ...editingGroup, name: e.target.value })
-                  else setNewGroupName(e.target.value)
-                }}
-              />
-              <Input
-                label="Description"
-                placeholder="Ex : 2ème étage, armoire réseau brassage"
-                value={editingGroup ? editingGroup.description || '' : newGroupDesc}
-                onChange={e => {
-                  if (editingGroup) setEditingGroup({ ...editingGroup, description: e.target.value })
-                  else setNewGroupDesc(e.target.value)
-                }}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              {editingGroup && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setEditingGroup(null)}>
-                  Annuler modification
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="primary"
-                loading={saveGroupMutation.isPending}
-                disabled={!(editingGroup ? editingGroup.name.trim() : newGroupName.trim())}
-                onClick={() => {
-                  if (editingGroup) {
-                    saveGroupMutation.mutate(editingGroup)
-                  } else {
-                    saveGroupMutation.mutate({ name: newGroupName.trim(), description: newGroupDesc.trim() })
-                  }
-                }}>
-                {editingGroup ? 'Mettre à jour' : 'Ajouter le groupe'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Existing Groups List */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Groupes configurés</h4>
-            <div className="divide-y divide-white/[0.04] rounded-xl border border-white/[0.05] bg-slate-900/40 overflow-hidden">
-              {(groups as DeviceGroup[]).map(g => {
-                const count = (devices as Device[]).filter(d => d.group_id === g.id).length
-                return (
-                  <div key={g.id} className="flex items-center justify-between p-3.5 hover:bg-white/[0.02] transition-colors">
-                    <div className="flex items-center gap-3">
-                      <Folder className="w-5 h-5 text-blue-400 shrink-0" />
-                      <div>
-                        <div className="text-sm font-bold text-slate-200">{g.name}</div>
-                        {g.description && <div className="text-xs text-slate-500">{g.description}</div>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
-                        {count} équipement{count > 1 ? 's' : ''}
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setEditingGroup(g)}
-                        className="w-7 h-7 text-slate-400 hover:text-blue-400"
-                        title="Éditer">
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => deleteGroupMutation.mutate(g.id)}
-                        className="w-7 h-7 text-slate-400 hover:text-red-400"
-                        title="Supprimer">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-              {(groups as DeviceGroup[]).length === 0 && (
-                <div className="p-6 text-center text-xs text-slate-500">
-                  Aucun groupe personnalisé pour le moment. Créez-en un ci-dessus.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2 border-t border-white/[0.04]">
-            <Button onClick={() => setShowGroupManager(false)}>Fermer</Button>
-          </div>
-        </div>
+        {renderGroupManagement(false)}
       </Modal>
 
       {/* Bulk Assign Group Modal */}
@@ -1007,11 +1037,32 @@ export default function InventoryPage() {
             onChange={e => setSelectedTargetGroupId(e.target.value)}
           />
 
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setManageGroupsInAssign(current => !current)
+                setEditingGroup(null)
+                setConfirmDeleteGroupId(null)
+              }}>
+              <FolderPlus className="w-4 h-4 text-blue-400" />
+              {manageGroupsInAssign ? 'Masquer la gestion' : 'Créer / gérer les groupes'}
+            </Button>
+          </div>
+          {manageGroupsInAssign && (
+            <div className="max-h-[48vh] overflow-y-auto rounded-xl border border-white/[0.06] p-3 custom-scrollbar">
+              {renderGroupManagement(true)}
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-white/[0.04]">
             <Button variant="ghost" onClick={() => setShowAssignModal(false)}>Annuler</Button>
             <Button
               variant="primary"
               loading={assignGroupMutation.isPending}
+              disabled={selectedDeviceIds.length === 0 || saveGroupMutation.isPending || deleteGroupMutation.isPending}
               onClick={() => {
                 assignGroupMutation.mutate({
                   deviceIds: selectedDeviceIds,
