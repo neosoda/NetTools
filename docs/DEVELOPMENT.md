@@ -47,7 +47,7 @@ npm run build:frontend # Assets de production, marqueur dist/.keep préservé
 
 Le serveur Vite ne remplace pas les méthodes Wails. Pour tester les opérations
 réseau et les dialogues natifs, utilisez une véritable session desktop.
-La sortie Windows de Wails est `build/bin/NetTools.exe`.
+La sortie Windows de Wails est `build/bin/NetTools.exe`. Pour préparer une release Windows, exécutez `powershell -NoProfile -ExecutionPolicy Bypass -File tools/package_release.ps1`. Le script utilise `info.productVersion` dans `wails.json` pour créer `release/NetTools-<version>.exe` et son fichier `.sha256`. Publiez ces deux fichiers après vérification que la version correspond au tag visé. Les fichiers de `release/` sont ignorés par Git et ne sont pas publiés automatiquement.
 
 Sous Debian/Ubuntu, installez via le gestionnaire système
 `build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev`, puis utilisez
