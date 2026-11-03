@@ -64,6 +64,16 @@ Cette vérification ne lance pas l'application et ne valide pas toutes les
 métadonnées du packaging Wails. Ne présentez pas un binaire compilé ainsi comme
 une release signée et testée sur Windows.
 
+## Publier une release Windows sans GitHub Actions
+
+Depuis un Windows x64 équipé de Go, Node.js, Wails CLI et GitHub CLI (`gh auth login`), synchronisez la branche `master`, puis lancez :
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\publish_release.ps1
+```
+
+Le script vérifie le dépôt et le tag, installe les dépendances verrouillées, exécute `npm run check`, construit l'exécutable Wails, vérifie son SHA-256 et publie les deux assets dans une **nouvelle** GitHub Release. La version provient de `wails.json` et les notes de `RELEASE_NOTES_v<version>.md`. Une release existante n'est pas remplacée et aucune CI distante n'est requise.
+
 ## Contrôles avant PR
 
 ```bash
