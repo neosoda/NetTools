@@ -1,4 +1,5 @@
 build/bin/
+release/
 node_modules/
 frontend/dist/*
 !frontend/dist/.keep
