@@ -10,6 +10,8 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ### Documentation et contribution
 
+- Préparation des releases Windows avec un nom d'exécutable versionné (`NetTools-<version>.exe`), déterminé depuis `wails.json`, et son empreinte SHA-256 ; documentation de téléchargement et packaging mise à jour.
+
 - Migration proposée du code original sous Apache 2.0, avec conservation des attributions tierces.
 - README et manuel réécrits autour du périmètre courant : inventaire persistant par défaut, audit fondé sur les preuves et recommandations consultatives.
 - Guides de développement, architecture et support, notices HTML synchronisées et outils de génération hors ligne.
