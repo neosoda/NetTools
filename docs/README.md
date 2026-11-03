@@ -19,7 +19,7 @@ commandes de sa branche de développement.
 - [Contribuer](../CONTRIBUTING.md) et [code de conduite](../CODE_OF_CONDUCT.md).
 - [Ressources Windows](../build/README.md).
 - [Présentation GitHub à appliquer](GITHUB_PRESENTATION.md).
-- [Changelog](../CHANGELOG.md) et [notes v1.7.0](../RELEASE_NOTES_v1.7.0.md).
+- [Changelog](../CHANGELOG.md) et [notes v1.7.1](../RELEASE_NOTES_v1.7.1.md).
 
 ## Comprendre les licences
 

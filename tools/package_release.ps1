@@ -17,7 +17,7 @@ if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
 
 Push-Location $root
 try {
-    & npm run build
+    & npm.cmd run build
     if ($LASTEXITCODE -ne 0) {
         throw "La compilation Wails a échoué (code $LASTEXITCODE)."
     }
@@ -29,6 +29,12 @@ finally {
 $sourceExe = Join-Path $root 'build/bin/NetTools.exe'
 if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) {
     throw "Exécutable Wails introuvable : $sourceExe"
+}
+
+$embeddedVersion = (Get-Item -LiteralPath $sourceExe).VersionInfo.ProductVersion
+$expectedVersionPattern = '^' + [regex]::Escape($version) + '(?:\.0)?$'
+if ($embeddedVersion -notmatch $expectedVersionPattern) {
+    throw "Version Windows incorrecte : attendu '$version', détecté '$embeddedVersion'."
 }
 
 $releaseDir = Join-Path $root 'release'

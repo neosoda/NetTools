@@ -27,6 +27,13 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 Cette section décrit des modifications en préparation, sans annoncer une nouvelle release ni modifier les conditions des anciennes versions.
 
+## [1.7.1] - 2026-11-03
+
+### Améliorations
+- Gestion des groupes depuis l'assignation multiple : création et sélection automatique du nouveau groupe, renommage, modification de la description, suppression confirmée et conservation des équipements dans « Non classés ».
+- Préparation des fichiers Windows `NetTools-<version>.exe` et empreinte SHA-256 ; procédure locale complète de validation, compilation et publication GitHub sans Actions.
+- Version Windows et version visible dans l'interface alignées sur 1.7.1.
+
 ## [1.7.0] - 2026-10-22
 
 ### Ajouts
